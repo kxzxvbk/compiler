@@ -24,4 +24,14 @@ void task3() {
     g_programme();
 }
 
+void task4() {
+    // error processing
+    t4 = true;
+    parse_symbols();
+    list_it = symbols.cbegin();
+    sym = getsym();
+    g_programme();
+    output_errors();
+}
+
 #endif //COMPILER_PIPELINE_H

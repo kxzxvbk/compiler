@@ -7,7 +7,6 @@
 #include <string>
 #include <utility>
 using namespace std;
-const int max_len = 100;  // max_len of a single symbol
 const char* symbol_type[39] = {
         // 0-3
         "IDENFR", "INTCON", "CHARCON", "STRCON",

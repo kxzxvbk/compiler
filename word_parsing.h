@@ -9,15 +9,48 @@
 #include <list>
 #include "symbol.h"
 #include "global.h"
+#include "global_error.h"
 using namespace std;
 
 list<symbol> symbols;
 list<symbol>::const_iterator list_it;
+static list<symbol>::const_iterator temp_it1;
 list<symbol>::const_iterator temp_it;
 list<symbol>::const_iterator loc_it;
+list<global_error> global_errors;
+
+void g_error(int line, char c) {
+    global_errors.emplace_back(line, c);
+}
+
+void output_errors() {
+    int line = -1;
+    for (auto err_it = global_errors.cbegin();err_it != global_errors.cend();err_it++) {
+        global_error err = *err_it;
+        if (err.get_line() != line) {
+            err.output();
+            line = err.get_line();
+        }
+    }
+}
+
+void g_error() {
+    // type not captured
+    return;
+}
 
 bool is_alpha(char c) {
     return (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || (c == '_'));
+}
+
+bool is_suitable_for_string(char c) {
+    if (c == 32 || c == 33 || (c >= 35 && c <= 126)) return true;
+    return false;
+}
+
+bool is_suitable_for_char(char c) {
+    if (c == '+' || c == '*' || c == '-' || c == '/' || is_alpha(c) || ('0' <= c && c <= '9')) return true;
+    else return false;
 }
 
 string tolower(string cc) {
@@ -35,13 +68,13 @@ void parse_symbols()
     fstream f;
     f.open("testfile.txt");
     char c = f.get();
-    int line_num = 0;
+    int line_num = 1;
     int col_num = 0;
 
     while (true) {
-        while (c == ' ') { c = f.get(); }
+        while (c == ' ' || c == '\t' || c == '\v' || c == '\f' || c == '\r') { c = f.get(); }
         if (c == EOF) { break; }
-        if (c == '\n' || c == '\r') {
+        if (c == '\n') {
             line_num++;
             col_num = 0;
             c = f.get();
@@ -51,7 +84,12 @@ void parse_symbols()
         if (c == '\'') {
             string cc;
             // TODO exception
+            bool printed = false;
             while ((c = f.get()) != '\'') {
+                if (!printed && !is_suitable_for_char(c)) {
+                    g_error(line_num, 'a');
+                    printed = true;
+                }
                 col_num++;
                 cc.append(1, c);
             }
@@ -63,10 +101,16 @@ void parse_symbols()
         else if (c == '"') {
             string cc;
             // TODO exception
+            bool printed = false;
             while ((c = f.get()) != '"') {
+                if (!is_suitable_for_string(c) && !printed) {
+                    g_error(line_num, 'a');
+                    printed = true;
+                }
                 col_num++;
                 cc.append(1, c);
             }
+            if (cc.length() == 0) g_error(line_num, 'a');
             col_num++;
             c = f.get();
             symbols.emplace_back(3, cc[0], cc, line_num, col_num);
@@ -250,6 +294,7 @@ void parse_symbols()
 
         // TODO exceptions
         else {
+            g_error(line_num, 'a');
             col_num++;
             c = f.get();
         }
@@ -261,11 +306,12 @@ symbol getsym() {
     symbol ans = *list_it;
     if (t3) {
         if (list_it != symbols.cbegin()) {
-            fout << symbol_type[(*temp_it).get_type()] << " ";
-            fout << (*temp_it).get_source() << endl;
+            fout << symbol_type[(*temp_it1).get_type()] << " ";
+            fout << (*temp_it1).get_source() << endl;
         }
     }
-    temp_it = list_it;
+    temp_it = temp_it1;
+    temp_it1 = list_it;
     list_it++;
     return ans;
 }

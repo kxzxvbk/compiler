@@ -7,10 +7,15 @@
 #include <iostream>
 #include <fstream>
 #include "symbol.h"
+#include "entry.h"
 using namespace std;
 
-ofstream fout("output.txt");
 bool t3 = false;
-symbol sym = symbol(1, 1, "1", 1, 1);
+bool t4 = false;
 
+ofstream fout("output.txt");
+ofstream eout("error.txt");
+
+symbol sym = symbol(1, 1, "1", 1, 1);
+Symbol_tab global_sym_tab;
 #endif //COMPILER_GLOBAL_H

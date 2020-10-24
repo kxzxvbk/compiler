@@ -1,0 +1,125 @@
+【问题描述】
+
+请根据给定的文法设计并实现词法分析程序，从源程序中识别出单词，记录其单词类别和单词值，输入输出及处理要求如下：
+
+   （1）数据结构和与语法分析程序的接口请自行定义；类别码需按下表格式统一定义；
+
+   （2）为了方便进行自动评测，输入的被编译源文件统一命名为testfile.txt（注意不要写错文件名）；输出的结果文件统一命名为output.txt（注意不要写错文件名），结果文件中每行按如下方式组织：
+
+单词类别码 单词的字符/字符串形式(中间仅用一个空格间隔)
+
+单词的类别码请统一按如下形式定义：
+
+
+
+
+
+单词名称	类别码	单词名称	类别码	单词名称	类别码	单词名称	类别码
+标识符	IDENFR	else	ELSETK	-	MINU	=	ASSIGN
+整形常量	INTCON	switch	SWITCHTK	*	MULT	;	SEMICN
+字符常量	CHARCON	case	CASETK	/	DIV	,	COMMA
+字符串	STRCON	default	DEFAULTTK	<	LSS	(	LPARENT
+const	CONSTTK	while	WHILETK	<=	LEQ	)	RPARENT
+int	INTTK	for	FORTK	>	GRE	[	LBRACK
+char	CHARTK	scanf	SCANFTK	>=	GEQ	]	RBRACK
+void	VOIDTK	printf	PRINTFTK	==	EQL	{	LBRACE
+main	MAINTK	return	RETURNTK	!=	NEQ	}	RBRACE
+if	IFTK	+	PLUS	：	COLON	
+
+
+
+【输入形式】testfile.txt中的符合文法要求的测试程序。
+【输出形式】要求将词法分析结果输出至output.txt中。
+
+【特别提醒】（1）读取的字符串要原样保留着便于输出，特别是数字，这里输出的并不是真正的单词值，其实是读入的字符串，单词值需另行记录。
+
+                    （2）本次作业只考核对正确程序的处理，但需要为今后可能出现的错误情况预留接口。
+
+                    （3）在今后的错误处理作业中，需要输出错误的行号，在词法分析的时候注意记录该信息。
+
+                    （4）单词的类别和单词值以及其他关注的信息，在词法分析阶段获取后，后续的分析阶段会使用，请注意记录；当前要求的输出只是为了便于评测，完成编译器中无需出现这些信息，请设计为方便打开/关闭这些输出的方案。
+
+【文法定义】请到“2020年文法定义(用于查看文法，不计入成绩）”作业中查看文法 
+
+【样例输入】
+
+coNst int cONst1 = 001, const2 = -100;
+const char const3 = '_';
+int change1;
+char change3;
+int gets1(int var1,int var2){
+    change1 = var1 + var2;
+    return (change1);
+}
+void main(){
+    printf("Hello World");
+    printf(gets1(10, 20));
+}
+【样例输出】
+
+CONSTTK coNst
+INTTK int
+IDENFR cONst1
+ASSIGN =
+INTCON 001
+COMMA ,
+IDENFR const2
+ASSIGN =
+MINU -
+INTCON 100
+SEMICN ;
+CONSTTK const
+CHARTK char
+IDENFR const3
+ASSIGN =
+CHARCON _
+SEMICN ;
+INTTK int
+IDENFR change1
+SEMICN ;
+CHARTK char
+IDENFR change3
+SEMICN ;
+INTTK int
+IDENFR gets1
+LPARENT (
+INTTK int
+IDENFR var1
+COMMA ,
+INTTK int
+IDENFR var2
+RPARENT )
+LBRACE {
+IDENFR change1
+ASSIGN =
+IDENFR var1
+PLUS +
+IDENFR var2
+SEMICN ;
+RETURNTK return
+LPARENT (
+IDENFR change1
+RPARENT )
+SEMICN ;
+RBRACE }
+VOIDTK void
+MAINTK main
+LPARENT (
+RPARENT )
+LBRACE {
+PRINTFTK printf
+LPARENT (
+STRCON Hello World
+RPARENT )
+SEMICN ;
+PRINTFTK printf
+LPARENT (
+IDENFR gets1
+LPARENT (
+INTCON 10
+COMMA ,
+INTCON 20
+RPARENT )
+RPARENT )
+SEMICN ;
+RBRACE }
