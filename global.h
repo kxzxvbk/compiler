@@ -15,7 +15,10 @@ bool t4 = false;
 
 ofstream fout("output.txt");
 ofstream eout("error.txt");
+ofstream mout("mips.txt");
 
 symbol sym = symbol(1, 1, "1", 1, 1);
 Symbol_tab global_sym_tab;
+map<string, Symbol_tab> tabs;
+
 #endif //COMPILER_GLOBAL_H

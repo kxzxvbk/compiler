@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 #include <map>
+#include "word_parsing.h"
+
 using namespace std;
 
 // type :
@@ -31,15 +33,20 @@ string to_lower(string cc) {
 
 class Entry {
 public:
-    Entry(int v_or_f_or_c, string name, int type, int line_n) {
+    Entry(int v_or_f_or_c, string name, int type, int line_n, int value=0) {
         this->v_or_f_or_c = v_or_f_or_c;
         this->name = to_lower(name);
         this->type = type;
         this->line_n = line_n;
+        this->value = value;
     }
 
     string get_name() {
         return this->name;
+    }
+
+    int get_value() const {
+        return this->value;
     }
 
     void add_arg(int t) {
@@ -62,11 +69,16 @@ public:
         return this->v_or_f_or_c == 3;
     }
 
+    vector<int> get_shape() {
+        return this->shape;
+    }
+
     int v_or_f_or_c;
 private:
     string name;
     int type;
     int line_n;
+    int value;
 
     // func
     vector<int> args_tab;

@@ -6,6 +6,7 @@
 #define COMPILER_PIPELINE_H
 #include "word_parsing.h"
 #include "grammar.h"
+#include "mips.h"
 
 void task2() {
     // lexical analysis
@@ -32,6 +33,17 @@ void task4() {
     sym = getsym();
     g_programme();
     output_errors();
+}
+
+void task5() {
+    // semantic analysis
+    parse_symbols();
+    list_it = symbols.cbegin();
+    sym = getsym();
+    g_programme();
+    pcode2quardcode();
+    output_qcodes_to_file();
+    qcodes2mips();
 }
 
 #endif //COMPILER_PIPELINE_H

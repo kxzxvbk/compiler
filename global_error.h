@@ -17,7 +17,7 @@ public:
     }
 
     void output() const {
-        if (t4) eout << this->line << ' ' << this->type << endl;
+        eout << this->line << ' ' << this->type << endl;
     }
 
     int get_line() const {

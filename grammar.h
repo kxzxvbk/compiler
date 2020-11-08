@@ -7,6 +7,7 @@
 #include "word_parsing.h"
 #include "global_error.h"
 #include "global.h"
+#include "pcode.h"
 #include <vector>
 
 static list<string> func_name_with_ret;
@@ -16,11 +17,14 @@ static vector<Symbol_tab*> symbol_stack;
 static Symbol_tab cur_tab;
 static int cur_switch_type;
 static Entry cur_func(1, "", 1, 1);
-static map<string, Symbol_tab> tabs;
 static Entry call_func(1, "", 1, 1);
 static bool has_ret = false;
+static bool global_area;
+
+static int lab_count = 0;
 
 int g_expr();
+int get_const();
 void g_func_call_with_ret();
 int g_term();
 int g_factor();
@@ -56,6 +60,18 @@ bool is_integer() {
     symbol sym_loc = sym;
     if (sym_loc.get_type() == 19 || sym_loc.get_type() == 20) sym_loc = get_loc_sym();
     return (sym_loc.get_type() == 1);
+}
+
+int cal_size(int x, int y) {
+    if (x == -1) return 4;
+    if (y == -1) return 4 * x;
+    return 4 * x * y;
+}
+
+string type_num2name(int type) {
+    if (type == 0) return "void";
+    if (type == 1) return "int";
+    return "char";
 }
 
 bool is_func_with_ret(const string& name) {
@@ -142,25 +158,34 @@ void g_integer() {
     if (t3) fout << "<整数>" << endl;
 }
 
-void g_relation_op() {
+int g_relation_op() {
     // 关系运算符
-    if (!(sym.get_type() == 23 || sym.get_type() == 24 || sym.get_type() == 25 ||
-    sym.get_type() == 26 || sym.get_type() == 27 || sym.get_type() == 28)) {
+    int temp2 = sym.get_type();
+    if (!(temp2 == 23 || temp2 == 24 || temp2 == 25 ||
+    temp2 == 26 || temp2 == 27 || temp2 == 28)) {
         g_error();
     }
+    int op_type = temp2 - 23;
     sym = getsym();
+    return op_type;
 }
 
 void g_programme() {
     symbol_stack.push_back(&global_sym_tab);
     tabs["@_global"] = global_sym_tab;
     cur_tab = global_sym_tab;
+
+    // var or const
+    global_area = true;
     if (sym.get_type() == 4) g_const_declare();
     if (!(is_func_declare() || is_main_declare())) {
         g_var_declare();
     }
     tabs["@_global"] = cur_tab;
     global_sym_tab = tabs["@_global"];
+    global_area = false;
+
+    // function
     while (!is_main_declare()) {
         if (sym.get_type() == 5 || sym.get_type() == 6) g_func_def_with_ret();
         else if (sym.get_type() == 7) g_func_def_without_ret();
@@ -193,46 +218,66 @@ void g_const_def() {
         if (sym.get_type() != 0) g_error();
         if (cur_tab.has_name(sym.get_source()))
             g_error(sym.get_line_n(), 'b');
-        cur_tab.append_sym(Entry(3, sym.get_source(), 1, sym.get_line_n()));
+        string sym_name = sym.get_source();
+        int sym_line = sym.get_line_n();
+
         sym = getsym();
         if (sym.get_type() != 30) g_error();
         sym = getsym();
+
+        int sym_value = get_const();
+        cur_tab.append_sym(Entry(3, sym_name, 1, sym_line, sym_value));
         g_integer();
+        emit("const", "int", sym_name);
 
         while (sym.get_type() == 32) {
             sym = getsym();
             if (sym.get_type() != 0) g_error();
             if (cur_tab.has_name(sym.get_source()))
                 g_error(sym.get_line_n(), 'b');
-            cur_tab.append_sym(Entry(3, sym.get_source(), 1, sym.get_line_n()));
+            sym_name = sym.get_source();
+            sym_line = sym.get_line_n();
             sym = getsym();
             if (sym.get_type() != 30) g_error();
             sym = getsym();
+            int sym_value = get_const();
+            cur_tab.append_sym(Entry(3, sym_name, 1, sym_line, sym_value));
             g_integer();
+            emit("const", "int", sym_name);
         }
     } else if (sym.get_type() == 6) {
         sym = getsym();
         if (sym.get_type() != 0) g_error();
         if (cur_tab.has_name(sym.get_source()))
             g_error(sym.get_line_n(), 'b');
-        cur_tab.append_sym(Entry(3, sym.get_source(), 2, sym.get_line_n()));
+        string sym_name = sym.get_source();
+        int sym_line = sym.get_line_n();
         sym = getsym();
         if (sym.get_type() != 30) g_error();
         sym = getsym();
         if (sym.get_type() != 2) g_error();
+        int sym_value = sym.get_value();
+        cur_tab.append_sym(Entry(3, sym_name, 2, sym_line, sym_value));
         sym = getsym();
+        emit("const", "char", sym_name);
 
         while (sym.get_type() == 32) {
             sym = getsym();
             if (sym.get_type() != 0) g_error();
             if (cur_tab.has_name(sym.get_source()))
                 g_error(sym.get_line_n(), 'b');
-            cur_tab.append_sym(Entry(3, sym.get_source(), 2, sym.get_line_n()));
+            sym_name = sym.get_source();
+            sym_line = sym.get_line_n();
+
             sym = getsym();
             if (sym.get_type() != 30) g_error();
             sym = getsym();
             if (sym.get_type() != 2) g_error();
+
+            sym_value = sym.get_value();
+            cur_tab.append_sym(Entry(3, sym_name, 2, sym_line, sym_value));
             sym = getsym();
+            emit("const", "char", sym_name);
         }
     } else {
         g_error();
@@ -279,6 +324,27 @@ int g_const() {
     return 1;
 }
 
+int get_const() {
+    loc_it = list_it;
+    symbol sym_loc = sym;
+    if (sym_loc.get_type() == 2) {
+        return sym_loc.get_value();
+    }
+
+    if (sym_loc.get_type() == 19) {
+        sym_loc = get_loc_sym();
+        return sym_loc.get_value();
+    }
+
+    if (sym_loc.get_type() == 1) {
+        return sym_loc.get_value();
+    }
+
+
+    sym_loc = get_loc_sym();
+    return -sym_loc.get_value();
+}
+
 void g_var_declare() {
     // 变量说明
     g_var_define();
@@ -307,8 +373,12 @@ void g_var_define_uninit(){
     if (sym.get_type() != 0) g_error();
     if (cur_tab.has_name(sym.get_source()))
         g_error(sym.get_line_n(), 'b');
+
+    string sym_name = sym.get_source();
+    string type_name = type_num2name(type);
+
     Entry cur_var = Entry(1, sym.get_source(), type, sym.get_line_n());
-    cur_tab.append_sym(cur_var);
+
     sym = getsym();
     // brackets
     int x = -1, y = -1;
@@ -328,13 +398,21 @@ void g_var_define_uninit(){
             else sym = getsym();
         }
     }
+    cur_tab.append_sym(cur_var);
+    int sym_size = cal_size(x, y);
+    if (!global_area) emit("var", type_name,
+                           "@" + cur_func.get_name() + "_@Usr_" + sym_name,to_string(sym_size));
+    else emit("allocate", type_name, sym_name, to_string(sym_size));
 
     while (sym.get_type() == 32) {
         sym = getsym();
         if (sym.get_type() != 0) g_error();
         if (cur_tab.has_name(sym.get_source())) g_error(sym.get_line_n(), 'b');
+
+        sym_name = sym.get_source();
+        type_name = type_num2name(type);
+
         cur_var = Entry(1, sym.get_source(), type, sym.get_line_n());
-        cur_tab.append_sym(cur_var);
         sym = getsym();
         // brackets
         if (sym.get_type() == 35) {
@@ -353,6 +431,12 @@ void g_var_define_uninit(){
                 else sym = getsym();
             }
         }
+
+        cur_tab.append_sym(cur_var);
+        sym_size = cal_size(x, y);
+        if (!global_area) emit("var", type_name,
+                               "@" + cur_func.get_name() + "_@Usr_" + sym_name,to_string(sym_size));
+        else emit("allocate", type_name, sym_name, to_string(sym_size));
     }
     if (t3) fout << "<变量定义无初始化>" << endl;
 }
@@ -365,8 +449,12 @@ void g_var_define_init() {
     if (sym.get_type() != 0) g_error();
     if (cur_tab.has_name(sym.get_source()))
         g_error(sym.get_line_n(), 'b');
+
+    string sym_name = sym.get_source();
+    string type_name = type_num2name(type);
+    vector<int> arr;
+
     Entry cur_var = Entry(1, sym.get_source(), type, sym.get_line_n());
-    cur_tab.append_sym(cur_var);
     sym = getsym();
 
     // brackets
@@ -394,11 +482,14 @@ void g_var_define_init() {
             sym = getsym();
             if (sym.get_type() != 37) g_error();
             sym = getsym();
+
+            arr.push_back(get_const());
             int a_type = g_const();
             if (a_type != cur_var.get_type()) g_error(sym.get_line_n(), 'o');
             j++;
             while (sym.get_type() == 32) {
                 sym = getsym();
+                arr.push_back(get_const());
                 a_type = g_const();
                 if (a_type != cur_var.get_type()) g_error(sym.get_line_n(), 'o');
                 j++;
@@ -412,11 +503,13 @@ void g_var_define_init() {
                 sym = getsym();
                 if (sym.get_type() != 37) g_error();
                 sym = getsym();
+                arr.push_back(get_const());
                 a_type = g_const();
                 if (a_type != cur_var.get_type()) g_error(sym.get_line_n(), 'o');
                 j++;
                 while (sym.get_type() == 32) {
                     sym = getsym();
+                    arr.push_back(get_const());
                     a_type = g_const();
                     if (a_type != cur_var.get_type()) g_error(sym.get_line_n(), 'o');
                     j++;
@@ -436,11 +529,13 @@ void g_var_define_init() {
             if (sym.get_type() != 37) g_error();
             sym = getsym();
             int i = 0;
+            arr.push_back(get_const());
             int a_type = g_const();
             if (a_type != cur_var.get_type()) g_error(sym.get_line_n(), 'o');
             i++;
             while (sym.get_type() == 32) {
                 sym = getsym();
+                arr.push_back(get_const());
                 a_type = g_const();
                 if (a_type != cur_var.get_type()) g_error(sym.get_line_n(), 'o');
                 i++;
@@ -452,9 +547,19 @@ void g_var_define_init() {
     } else { // single var
         if (sym.get_type() != 30) g_error();
         sym = getsym();
+        arr.push_back(get_const());
         int a_type = g_const();
         if (a_type != cur_var.get_type()) g_error(sym.get_line_n(), 'o');
     }
+
+    cur_tab.append_sym(cur_var);
+    int sym_size = cal_size(x, y);
+    if (!global_area) {
+        emit("var", type_name, "@" + cur_func.get_name() + "_@Usr_" + sym_name, to_string(sym_size));
+        emit("initialize_a", arr, "@" + cur_func.get_name() + "_@Usr_" + sym_name);
+    }
+    else emit("allocate_init", type_name, sym_name, to_string(sym_size));
+
     if (t3) fout << "<变量定义及初始化>" << endl;
 }
 
@@ -553,6 +658,7 @@ void g_main_func() {
     if (cur_tab.has_name(sym.get_source()))
         g_error(sym.get_line_n(), 'b');
     cur_func = Entry(1, "main", 0, sym.get_line_n());
+    emit("set_function_flag", "main");
     cur_tab.append_sym(cur_func);
     tabs["@_global"] = cur_tab;
     cur_tab = Symbol_tab();
@@ -576,10 +682,12 @@ int g_factor() {
     // 因子
     int type;
     if (sym.get_type() == 2) {
+        emit("li", to_string(sym.get_value()));
         sym = getsym();
         type = 2;
     }
     else if (is_integer()) {
+        emit("li", to_string(get_const()));
         g_integer();
         type = 1;
     }
@@ -588,7 +696,8 @@ int g_factor() {
         type = g_expr();
         if (sym.get_type() != 34) g_error((*temp_it).get_line_n(), 'l');
         else sym = getsym();
-    } else if (sym.get_type() == 0) {
+    }
+    else if (sym.get_type() == 0) {
         if (!cur_tab.has_name(sym.get_source()) && !global_sym_tab.has_name(sym.get_source())) {
             g_error(sym.get_line_n(), 'c');
             sym = getsym();
@@ -605,6 +714,9 @@ int g_factor() {
         type = (cur_tab.has_name(sym.get_source()))?cur_tab.get(sym.get_source()).get_type() :
                (global_sym_tab.has_name(sym.get_source()))?global_sym_tab.get(sym.get_source()).get_type():
                3;
+
+        string symbol_name1 = sym.get_source();
+
         sym = getsym();
         // brackets
         if (sym.get_type() == 35) {
@@ -614,11 +726,39 @@ int g_factor() {
             if (sym.get_type() != 36) g_error((*temp_it).get_line_n(), 'm');
             else sym = getsym();
             if (sym.get_type() == 35) {
+                // 2-D
                 sym = getsym();
                 type1 = g_expr();
                 if (type1 != 1) g_error(sym.get_line_n(), 'i');
                 if (sym.get_type() != 36) g_error((*temp_it).get_line_n(), 'm');
                 else sym = getsym();
+                if (!cur_tab.has_name(symbol_name1)) {
+                    Entry eee = global_sym_tab.get(symbol_name1);
+                    emit("lod_2D", symbol_name1, to_string(eee.get_shape()[1]));
+                } else {
+                    Entry eee = cur_tab.get(symbol_name1);
+                    emit("lod_2D", "@" + cur_func.get_name() + "_" + symbol_name1, to_string(eee.get_shape()[1]));
+                }
+            } else {
+                // 1-D
+                if (!cur_tab.has_name(symbol_name1)) {
+                    Entry eee = global_sym_tab.get(symbol_name1);
+                    emit("lod_1D", symbol_name1);
+                } else {
+                    Entry eee = cur_tab.get(symbol_name1);
+                    emit("lod_1D", "@" + cur_func.get_name() + "_" + symbol_name1);
+                }
+            }
+        } else {
+            // single var
+            if (!cur_tab.has_name(symbol_name1)) {
+                Entry eee = global_sym_tab.get(symbol_name1);
+                if (eee.is_const()) emit("li", to_string(eee.get_value()));
+                else emit("lod", symbol_name1);
+            } else {
+                Entry eee = cur_tab.get(symbol_name1);
+                if (eee.is_const()) emit("li", to_string(eee.get_value()));
+                else emit("lod", "@" + cur_func.get_name() + "_" + symbol_name1);
             }
         }
     } else type = 0;
@@ -630,8 +770,13 @@ int g_term() {
     // 项
     int type = g_factor();
     while (sym.get_type() == 21 || sym.get_type() == 22) {
+        int tmpp = sym.get_type();
         sym = getsym();
         int temp = g_factor();
+
+        if (tmpp == 21) emit("mult");
+        else emit("div");
+
         if (type == 2 || (type == 0 && temp != 0)) { type = 1; }
         if (temp == 3) type = 3;
     }
@@ -647,8 +792,13 @@ int g_expr() {
     }
     type = g_term();
     while (sym.get_type() == 19 || sym.get_type() == 20) {
+        int tmpp = sym.get_type();
         sym = getsym();
         int temp = g_term();
+
+        if (tmpp == 19) emit("add");
+        else emit("sub");
+
         if (type == 2 || (type == 0 && temp != 0)) type = 1;
         if (temp == 3) type = 3;
     }
@@ -714,7 +864,10 @@ void g_assign_sentence() {
         if (ee.is_const()) g_error(sym.get_line_n(), 'j');
     }
 
+    string sym_name = sym.get_source();
+
     sym = getsym();
+    int shape = 0;
     // brackets
     if (sym.get_type() == 35) {
         sym = getsym();
@@ -726,29 +879,47 @@ void g_assign_sentence() {
             g_expr();
             if (sym.get_type() != 36) g_error(sym.get_line_n(), 'm');
             else sym = getsym();
+            shape = 2;
+        } else {
+            shape = 1;
         }
     }
     if (sym.get_type() != 30) g_error();
     sym = getsym();
     g_expr();
+    if (shape == 0) emit("assign", sym_name);
+    else if (shape == 1) emit("assign_1D", sym_name);
+    else {
+        int shape1;
+        if (cur_tab.has_name(sym_name)) shape1 = cur_tab.get(sym_name).get_shape()[1];
+        else shape1 = global_sym_tab.get(sym_name).get_shape()[1];
+        emit("assign_2D", sym_name, to_string(shape1));
+    }
     if (t3) fout << "<赋值语句>" << endl;
 }
 
-void g_condition() {
+int g_condition() {
     // 条件
     int type1 = g_expr();
-    g_relation_op();
+    int op_num = g_relation_op();
     int type2 = g_expr();
     if (type1 != 1 || type2 != 1) g_error(sym.get_line_n(), 'f');
     if (t3) fout << "<条件>" << endl;
+    return op_num;
 }
 
 void g_condition_sentence() {
     if (sym.get_type() != 9) g_error();
     sym = getsym();
+    lab_count++;
+
+    int temp_l_number = lab_count;
+    emit("set_if_label", to_string(lab_count));
+
     if (sym.get_type() != 33) g_error();
     sym = getsym();
-    g_condition();
+    int op_type = g_condition();
+    emit("branch", to_string(op_type), to_string(temp_l_number));
     if (sym.get_type() != 34) g_error((*temp_it).get_line_n(), 'l');
     else sym = getsym();
     g_sentence();
@@ -756,6 +927,8 @@ void g_condition_sentence() {
         sym = getsym();
         g_sentence();
     }
+
+    emit("end_label", to_string(temp_l_number));
     if (t3) fout << "<条件语句>" << endl;
 }
 
@@ -767,16 +940,26 @@ void g_step_length() {
 void g_loop_sentence() {
     if (sym.get_type() == 14) {
         sym = getsym();
+
+        lab_count++;
+        int temp_l_num = lab_count;
+        emit("set_label", to_string(temp_l_num));
+
         if (sym.get_type() != 33) g_error();
         sym = getsym();
-        g_condition();
+        int op_type = g_condition();
+        emit("branch", to_string(op_type), to_string(temp_l_num));
+
         if (sym.get_type() != 34) g_error((*temp_it).get_line_n(), 'l');
         else sym = getsym();
         g_sentence();
+        emit("jump", "set_label_" + to_string(temp_l_num));
+        emit("end_label", to_string(temp_l_num));
     } else if (sym.get_type() == 15) {
         sym = getsym();
         if (sym.get_type() != 33) g_error();
         sym = getsym();
+        // init
         if (sym.get_type() != 0) g_error();
         if (!cur_tab.has_name(sym.get_source()) && !global_sym_tab.has_name(sym.get_source()))
             g_error(sym.get_line_n(), 'c');
@@ -784,11 +967,21 @@ void g_loop_sentence() {
         if (sym.get_type() != 30) g_error();
         sym = getsym();
         g_expr();
+
+        // condition
+        lab_count++;
+        int temp_l_num = lab_count;
+        emit("set_label", to_string(temp_l_num));
+
         if (sym.get_type() != 31) g_error((*temp_it).get_line_n(), 'k');
         else sym = getsym();
-        g_condition();
+        int op_type = g_condition();
+        emit("branch", to_string(op_type), to_string(temp_l_num));
+
         if (sym.get_type() != 31) g_error((*temp_it).get_line_n(), 'k');
         else sym = getsym();
+
+        // post_process
         if (sym.get_type() != 0) g_error();
         if (!cur_tab.has_name(sym.get_source()) && !global_sym_tab.has_name(sym.get_source()))
             g_error(sym.get_line_n(), 'c');
@@ -796,36 +989,52 @@ void g_loop_sentence() {
         if (sym.get_type() != 30) g_error();
         sym = getsym();
         if (sym.get_type() != 0) g_error();
+        string loop_var = sym.get_source();
         if (!cur_tab.has_name(sym.get_source()) && !global_sym_tab.has_name(sym.get_source()))
             g_error(sym.get_line_n(), 'c');
         sym = getsym();
         if (sym.get_type() != 19 && sym.get_type() != 20) g_error();
+        int plus_or_minu = sym.get_type() - 19;
         sym = getsym();
+        int step_size = sym.get_value();
         g_step_length();
+
         if (sym.get_type() != 34) g_error((*temp_it).get_line_n(), 'l');
         else sym = getsym();
         g_sentence();
+        emit("set_post_process", loop_var, to_string(plus_or_minu), to_string(step_size));
+        emit("j", to_string(temp_l_num));
+        emit("end_label", to_string(temp_l_num));
     } else {
         g_error();
     }
     if (t3) fout << "<循环语句>" << endl;
 }
 
-void g_default() {
+static int case_num = 0;
+void g_default(int cur_lab_num) {
     if (sym.get_type() != 13) {
         g_error(sym.get_line_n(), 'p');
         return;
     }
     else sym = getsym();
+    case_num++;
+    emit("set_label", to_string(cur_lab_num) + "_" + to_string(case_num));
     if (sym.get_type() != 29) g_error();
     sym = getsym();
     g_sentence();
     if (t3) fout << "<缺省>" << endl;
 }
 
-void g_case_sub_sentence() {
+void g_case_sub_sentence(int cur_lab_num) {
+    case_num++;
     if (sym.get_type() != 12) g_error();
     sym = getsym();
+    int case_const = get_const();
+    emit("li", to_string(case_const));
+    emit("set_label", to_string(cur_lab_num) + "_" + to_string(case_num));
+    emit("branch", "5",
+         "end_label_" +  to_string(cur_lab_num) + "_" + to_string(case_num+1));
     int case_type;
     case_type = g_const();
     if (case_type != cur_switch_type) g_error(sym.get_line_n(), 'o');
@@ -835,11 +1044,12 @@ void g_case_sub_sentence() {
     if (t3) fout << "<情况子语句>" << endl;
 }
 
-void g_case_table() {
+void g_case_table(int cur_lab_num) {
     // 情况表
-    g_case_sub_sentence();
+    case_num = 0;
+    g_case_sub_sentence(cur_lab_num);
     while (sym.get_type() == 12) {
-        g_case_sub_sentence();
+        g_case_sub_sentence(lab_count);
     }
     if (t3) fout << "<情况表>" << endl;
 }
@@ -857,8 +1067,9 @@ void g_case_sentence() {
     else sym = getsym();
     if (sym.get_type() != 37) g_error();
     sym = getsym();
-    g_case_table();
-    g_default();
+    lab_count++;
+    g_case_table(lab_count);
+    g_default(lab_count);
     if (sym.get_type() != 38) g_error();
     sym = getsym();
     if (t3) fout << "<情况语句>" << endl;
@@ -921,16 +1132,23 @@ void g_read() {
     sym = getsym();
     if (sym.get_type() != 33) g_error();
     sym = getsym();
+
+    string sym_type;
+
     if (sym.get_type() != 0) g_error();
     if (!cur_tab.has_name(sym.get_source()) && !global_sym_tab.has_name(sym.get_source())) {
         g_error(sym.get_line_n(), 'c');
     } else {
         if (cur_tab.has_name(sym.get_source())) {
             if (cur_tab.get(sym.get_source()).is_const()) g_error(sym.get_line_n(), 'j');
+            sym_type = (cur_tab.get(sym.get_source()).get_type() == 1) ? "int" : "char";
         } else {
             if (global_sym_tab.get(sym.get_source()).is_const()) g_error(sym.get_line_n(), 'j');
+            sym_type = (global_sym_tab.get(sym.get_source()).get_type() == 1) ? "int" : "char";
         }
     }
+    if (sym_type == "int") emit("scanf_int", sym.get_source());
+    else emit("scanf_char", sym.get_source());
     sym = getsym();
     if (sym.get_type() != 34) g_error((*temp_it).get_line_n(), 'l');
     else sym = getsym();
@@ -944,16 +1162,22 @@ void g_write() {
     sym = getsym();
 
     if (sym.get_type() == 3) {
+        emit("print_s", sym.get_source());
         g_string();
         if (sym.get_type() == 32) {
             sym = getsym();
-            g_expr();
+            int write_type = g_expr();
+            if (write_type == 1) emit("print_v_int");
+            else emit("print_v_char");
         }
     } else {
-        g_expr();
+        int write_type = g_expr();
+        if (write_type == 1) emit("print_v_int");
+        else emit("print_v_char");
     }
     if (sym.get_type() != 34) g_error((*temp_it).get_line_n(), 'l');
     else sym = getsym();
+    emit("print_s", "\n");
     if (t3) fout << "<写语句>" << endl;
 }
 
