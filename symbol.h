@@ -7,6 +7,8 @@
 #include <string>
 #include <utility>
 using namespace std;
+bool t5 = false;
+
 const char* symbol_type[39] = {
         // 0-3
         "IDENFR", "INTCON", "CHARCON", "STRCON",
@@ -46,10 +48,24 @@ private:
     string source;
 };
 
+string to_lower_string(string cc) {
+    string ret = cc;
+    for (char & i : ret) {
+        if ('A' <= i && i <= 'Z') {
+            i = i + 32;
+        }
+    }
+    return ret;
+}
+
 symbol::symbol(int type, int value, string source, int line_n, int col_n)  {
     this->type = type;
     this->value = value;
-    this->source = source;
+    if (t5 && type == 0) {
+        this->source = to_lower_string(source);
+    } else {
+        this->source = source;
+    }
     this->line_n = line_n;
     this->col_n = col_n;
 }

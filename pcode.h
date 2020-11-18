@@ -59,11 +59,22 @@ void flush_emit() {
 void emit(string type, string op1="", string op2="", string op3="") {
     if (!buffer_on) pcodes.emplace_back(type, op1, op2, op3, vector<int>());
     else buffer.emplace_back(type, op1, op2, op3, vector<int>());
+    Pcode pc = pcodes.back();
+    cout << pc.type << " " << pc.op1 << " " << pc.op2 << " " << pc.op3 << endl;
 }
 
 void emit(string type, vector<int> arr, string name="") {
     if (!buffer_on) pcodes.emplace_back(type, name, "", "", arr);
     else buffer.emplace_back(type, name, "", "", arr);
+    Pcode pc = pcodes.back();
+    cout << pc.type << " " << pc.op1 << " " << pc.op2 << " " << pc.op3 << endl;
+}
+
+void emit(string type, vector<int> arr, string op1, string op2, string op3) {
+    if (!buffer_on) pcodes.emplace_back(type, op1, op2, op3, arr);
+    else buffer.emplace_back(type, op1, op2, op3, arr);
+    Pcode pc = pcodes.back();
+    cout << pc.type << " " << pc.op1 << " " << pc.op2 << " " << pc.op3 << endl;
 }
 
 

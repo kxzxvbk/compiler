@@ -37,6 +37,7 @@ void task4() {
 
 void task5() {
     // semantic analysis
+    t5 = true;
     parse_symbols();
     list_it = symbols.cbegin();
     sym = getsym();

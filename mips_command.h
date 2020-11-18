@@ -9,29 +9,23 @@
 
 string blank = ", ";
 void lw(const string& reg_name, int offset, const string& base_reg) {
-    if (base_reg == "$sp") mout << "lw " + reg_name + blank + to_string(-offset) + "(" + base_reg + ")" << endl;
-    else mout << "lw " + reg_name + blank + to_string(offset-4) + "(" + base_reg + ")" << endl;
+    if (base_reg == "$sp") mout << "lw " + reg_name + blank + to_string(offset) + "(" + base_reg + ")" << endl;
+    else mout << "lw " + reg_name + blank + to_string(offset) + "(" + base_reg + ")" << endl;
 }
 
 void lw(const string& reg_name, const string& off_reg, const string& base_reg) {
-    if (base_reg == "$sp") {
-        mout << "neg " + off_reg + blank + off_reg << endl;
-        mout << "lw " + reg_name + blank + off_reg + "(" + base_reg + ")" << endl;
-    }
-    else mout << "lw " + reg_name + blank + off_reg + "(" + base_reg + ")" << endl;
+    mout << "add " + off_reg + blank + base_reg + blank + off_reg << endl;
+    mout << "lw " + reg_name + ", (" + off_reg + ")" << endl;
 }
 
 void sw(const string& reg_name, int offset, const string& base_reg) {
-    if (base_reg == "$sp") mout << "sw " + reg_name + blank + to_string(-offset) + "(" + base_reg + ")" << endl;
-    else mout << "sw " + reg_name + blank + to_string(offset-4) + "(" + base_reg + ")" << endl;
+    if (base_reg == "$sp") mout << "sw " + reg_name + blank + to_string(offset) + "(" + base_reg + ")" << endl;
+    else mout << "sw " + reg_name + blank + to_string(offset) + "(" + base_reg + ")" << endl;
 }
 
 void sw(const string& reg_name, const string& off_reg, const string& base_reg) {
-    if (base_reg == "$sp") {
-        mout << "neg " + off_reg + blank + off_reg << endl;
-        mout << "sw " + reg_name + blank + off_reg + "(" + base_reg + ")" << endl;
-    }
-    else mout << "sw " + reg_name + blank + off_reg + "(" + base_reg + ")" << endl;
+    mout << "add " + off_reg + blank + base_reg + blank + off_reg << endl;
+    mout << "sw " + reg_name + ", (" + off_reg + ")" << endl;
 }
 
 void sb(const string& reg_name, int offset, const string& base_reg) {
@@ -114,7 +108,23 @@ void la(const string& reg_name, const string& label_name) {
 }
 
 void branch(const string& type, const string& op1, const string& op2, const string& label) {
-    mout << type + " " + op1 + blank + op1 + blank + label;
+    mout << type + " " + op1 + blank + op2 + blank + label << endl;
+}
+
+void jal(const string& label_name) {
+    mout << "jal " << label_name << endl;
+}
+
+void jr(const string& reg_name) {
+    mout << "jr " << reg_name <<endl;
+}
+
+void allocate_string(const string& string_name, const string& content) {
+    mout << string_name + ":    .asciiz    \"" + content + "\"" << endl;
+}
+
+void mv(const string& reg_dst, const string& reg_src) {
+    mout << "move " + reg_dst + blank + reg_src << endl;
 }
 
 #endif //UNTITLED_MIPS_COMMAND_H

@@ -107,8 +107,14 @@ void parse_symbols()
                     g_error(line_num, 'a');
                     printed = true;
                 }
-                col_num++;
-                cc.append(1, c);
+                if (c == '\\') {
+                    cc.append(2, c);
+                    col_num++;
+                }
+                else {
+                    col_num++;
+                    cc.append(1, c);
+                }
             }
             if (cc.length() == 0) g_error(line_num, 'a');
             col_num++;
