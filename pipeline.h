@@ -7,6 +7,7 @@
 #include "word_parsing.h"
 #include "grammar.h"
 #include "mips.h"
+#include "flow_graph.h"
 
 void task2() {
     // lexical analysis
@@ -36,7 +37,7 @@ void task4() {
 }
 
 void task5() {
-    // semantic analysis
+    // semantic analysis & code generation
     t5 = true;
     parse_symbols();
     list_it = symbols.cbegin();
@@ -44,6 +45,10 @@ void task5() {
     g_programme();
     pcode2quardcode();
     output_qcodes_to_file();
+    if (o2) {
+        optimization_for_qcodes();
+        output_optimized_qcodes_to_file();
+    }
     qcodes2mips();
 }
 

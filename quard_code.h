@@ -37,11 +37,36 @@ public:
     string dst;
     vector<int> arr;
 
+    string get_right1() const {
+        string op;
+        if (type == "add") op = "+";
+        else if (type == "sub") op = "-";
+        else if (type == "mult" || type == "multi_rep") op = "*";
+        else if (type == "div") op = "/";
+        else if (type == "assign") return op1;
+        return op1 + op + op2;
+    }
+
+    string get_right2() const {
+        string op;
+        if (type == "add") op = "+";
+        else if (type == "sub") op = "-";
+        else if (type == "mult" || type == "multi_rep") op = "*";
+        else if (type == "div") op = "/";
+        else if (type == "assign") return op1;
+        else if (type == "lod") return op1;
+        else op = "$Zhsic@WH1l0Ve11Ang2h@0cHu$";
+        return op2 + op + op1;
+    }
+
+    string get_left() const {
+        return dst;
+    }
+
     string to_string() const {
         if (this->type == "add") return dst + "=" + op1 + " " + type + " " + op2;
         if (this->type == "sub") return dst + "=" + op1 + " " +type + " " + op2;
         if (this->type == "mult") return dst + "=" + op1 + " " + type + " " + op2;
-        if (this->type == "multi") return dst + "=" + op1 + " " + type + " " + op2;
         if (this->type == "div") return dst + "=" + op1 + " " + type + " " + op2;
         if (this->type == "lod") return type+ " " + dst+ " " + op1;
         if (this->type == "lod_off") return type + " " + dst + " " + op1 + " offset: " + op2;
@@ -62,11 +87,11 @@ public:
         if (this->type == "set_function_flag") return type + " " + dst;
         if (this->type == "assign") return dst + "=" + op1;
         if (this->type == "assign_off") return dst + "=" + op1 + " offset: " + op2;
-        if (this->type == "set_label") return type + " " + op1;
+        if (this->type == "set_label") return type + "_" + dst;
         if (this->type == "set_if_label") return type + " " + op1;
         if (this->type == "end_label") return type + " " + op1;
         if (type == "beq" || type == "bne" || type == "ble" ||
-            type == "blt" || type == "bge" || type == "bgt") return type + " " + op1 + " " + op2;
+            type == "blt" || type == "bge" || type == "bgt") return type + " " + op1 + " " + op2, + " " + dst;
         if (type == "jump") return type + " " + dst;
         if (type == "push") return type + " " + dst;
         if (type == "para") return type + " " + dst;
@@ -343,6 +368,13 @@ void output_qcodes_to_file() {
     ofstream qout("quard_code.txt");
     for (const auto & qcode : qcodes) {
         qout << qcode.to_string() << endl;
+    }
+}
+
+void output_optimized_qcodes_to_file() {
+    ofstream oout("optimized_quard_code.txt");
+    for (const auto & qcode : qcodes) {
+        oout << qcode.to_string() << endl;
     }
 }
 

@@ -12,6 +12,9 @@ using namespace std;
 
 bool t3 = false;
 bool t4 = false;
+bool o1 = true;
+bool o2 = true;
+
 
 ofstream fout("output.txt");
 ofstream eout("error.txt");

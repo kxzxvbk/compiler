@@ -37,7 +37,6 @@ map<string ,bool> temp_sym_glob;
 map<string, bool> temp_sym_const;
 map<string, int> temp_sym_focus;
 map<string, int> temp_func_tab;
-list<int> jumping_stack;
 string cur_func_name = "";
 int top_index = 0;
 int over_flow_index = 0;
@@ -50,6 +49,18 @@ int str2int(string in) {
     int size;
     ss >> size;
     return size;
+}
+
+int get_log(int x) {
+    if (x < 0) x = -x;
+    int pow = 0;
+    if (x == 1 || x == 0) return -1;
+    while (x >= 2) {
+        if (x % 2 != 0) return -1;
+        x /= 2;
+        pow++;
+    }
+    return pow;
 }
 
 bool start_with(string ss, string prefix) {
@@ -109,10 +120,26 @@ void set_temp_sym_tab() {
     push_const("std::endl", int('\n'));
     for (iterator = qcodes.cbegin(); iterator != qcodes.cend(); iterator++) {
         Quardcode pc = *iterator;
-        if (pc.type == "add" || pc.type == "sub" || pc.type == "mult" || pc.type == "div"
-            || pc.type == "multi" || pc.type == "multi_rep" || pc.type == "neg"
-            || pc.type == "para") {
-            push_tab(pc.dst, 4, is_glob);
+        if (pc.type == "add" || pc.type == "sub" || pc.type == "mult" || pc.type == "div") {
+            if (temp_sym_const[pc.op1] && temp_sym_const[pc.op2] && o1) {
+                if (pc.type == "add") push_const(pc.dst, temp_sym_focus[pc.op1] + temp_sym_focus[pc.op2]);
+                else if (pc.type == "sub") push_const(pc.dst, temp_sym_focus[pc.op1] - temp_sym_focus[pc.op2]);
+                else if (pc.type == "mult") push_const(pc.dst, temp_sym_focus[pc.op1] * temp_sym_focus[pc.op2]);
+                else if (pc.type == "div") push_const(pc.dst, temp_sym_focus[pc.op1] / temp_sym_focus[pc.op2]);
+            }
+            else push_tab(pc.dst, 4, is_glob);
+        }
+        else if (pc.type == "multi_rep" ) {
+            if (temp_sym_const[pc.op1] && o1) {
+                push_const(pc.dst, str2int(pc.op2) * temp_sym_focus[pc.op1]);
+            }
+            else push_tab(pc.dst, 4, is_glob);
+        }
+        else if (pc.type == "neg") {
+            if (temp_sym_const[pc.op1] && o1) {
+                push_const(pc.dst, -temp_sym_focus[pc.op1]);
+            }
+            else push_tab(pc.dst, 4, is_glob);
         }
         else if (pc.type == "li") {
             push_const(pc.dst, str2int(pc.op1));
@@ -131,7 +158,7 @@ void set_temp_sym_tab() {
         } else if (pc.type == "lod") {
             if (!start_with(pc.op1, "@")) push_tab(pc.dst, 4, is_glob);
             else push_quot(pc.dst, pc.op1, is_glob);
-        } else if (pc.type == "lod_off") {
+        } else if (pc.type == "lod_off" || pc.type == "para") {
             push_tab(pc.dst, 4, is_glob);
         } else if (pc.type == "call") {
             if (pc.op1 != "@None") push_tab(pc.op1, 4, is_glob);
@@ -156,7 +183,6 @@ void qcodes2mips() {
         || pc.type == "multi_rep") {
             current_top += 4;
             if (pc.type == "multi_rep") {
-                li("$t0", pc.op2);
                 int addr = temp_sym_tab[pc.op1];
                 string base_reg = "$sp";
                 if (temp_sym_glob[pc.op1]) base_reg = data_base;
@@ -165,12 +191,22 @@ void qcodes2mips() {
                 string base_reg1 = "$sp";
                 if (temp_sym_glob[pc.dst]) base_reg = data_base;
 
-                if (temp_sym_const[pc.op1]) li("$t1", to_string(temp_sym_focus[pc.op1]));
-                else lw("$t1", addr, base_reg);
-
-                mult("$t0", "$t1");
-                mflo("$t0");
-                sw("$t0", addr1, base_reg1);
+                if (temp_sym_const[pc.op1] && o1);
+                else {
+                    if (temp_sym_const[pc.op1]) li("$t0", to_string(temp_sym_focus[pc.op1]));
+                    else lw("$t0", addr, base_reg);
+                    int con = str2int(pc.op2);
+                    if (o1 && get_log(con) > 0) {
+                        if (con < 0) neg("$t0", "$t0");
+                        sll("$t0", "$t0", to_string(get_log(con)));
+                    }
+                    else if (pc.op2 != "1" || !o1) {
+                        li("$t1", pc.op2);
+                        mult("$t0", "$t1");
+                        mflo("$t0");
+                    }
+                    sw("$t0", addr1, base_reg1);
+                }
             }
             else if (!temp_sym_const[pc.op2] && !temp_sym_const[pc.op1]) {
                 int addr1 = temp_sym_tab[pc.dst];
@@ -212,21 +248,51 @@ void qcodes2mips() {
 
                 lw("$t0", addr2, base_reg2);
                 if (pc.type == "add") {
-                    addi("$t2", "$t0", to_string(temp_sym_focus[pc.op2]));
-                    sw("$t2", addr1, base_reg1);
+                    if (temp_sym_focus[pc.op2] == 0 && o1) {
+                        sw("$t0", addr1, base_reg1);
+                    }
+                    else {
+                        addi("$t2", "$t0", to_string(temp_sym_focus[pc.op2]));
+                        sw("$t2", addr1, base_reg1);
+                    }
                 } else if (pc.type == "sub") {
-                    sub("$t2", "$t0", to_string(temp_sym_focus[pc.op2]));
-                    sw("$t2", addr1, base_reg1);
+                    if (temp_sym_focus[pc.op2] == 0 && o1) {
+                        sw("$t0", addr1, base_reg1);
+                    }
+                    else {
+                        sub("$t2", "$t0", to_string(temp_sym_focus[pc.op2]));
+                        sw("$t2", addr1, base_reg1);
+                    }
                 } else if (pc.type == "mult") {
-                    li("$t1", to_string(temp_sym_focus[pc.op2]));
-                    mult("$t0", "$t1");
-                    mflo("$t0");
-                    sw("$t0", addr1, base_reg1);
+                    if (temp_sym_focus[pc.op2] == 1 && o1) {
+                        sw("$t0", addr1, base_reg1);
+                    }
+                    else if (o1 && get_log(temp_sym_focus[pc.op2]) > 0) {
+                        if (temp_sym_focus[pc.op2] < 0) neg("$t0", "$t0");
+                        sll("$t0", "$t0", to_string(get_log(temp_sym_focus[pc.op2])));
+                        sw("$t0", addr1, base_reg1);
+                    }
+                    else {
+                        li("$t1", to_string(temp_sym_focus[pc.op2]));
+                        mult("$t0", "$t1");
+                        mflo("$t0");
+                        sw("$t0", addr1, base_reg1);
+                    }
                 } else if (pc.type == "div") {
-                    li("$t1", to_string(temp_sym_focus[pc.op2]));
-                    div("$t0", "$t1");
-                    mflo("$t0");
-                    sw("$t0", addr1, base_reg1);
+                    if (temp_sym_focus[pc.op2] == 1 && o1) {
+                        sw("$t0", addr1, base_reg1);
+                    }
+                    else if (o1 && get_log(temp_sym_focus[pc.op2]) > 0) {
+                        if (temp_sym_focus[pc.op2] < 0) neg("$t0", "$t0");
+                        sra("$t0", "$t0", to_string(get_log(temp_sym_focus[pc.op2])));
+                        sw("$t0", addr1, base_reg1);
+                    }
+                    else {
+                        li("$t1", to_string(temp_sym_focus[pc.op2]));
+                        div("$t0", "$t1");
+                        mflo("$t0");
+                        sw("$t0", addr1, base_reg1);
+                    }
                 }
             }
             else if (!temp_sym_const[pc.op2]) {
@@ -239,17 +305,32 @@ void qcodes2mips() {
 
                 lw("$t0", addr2, base_reg2);
                 if (pc.type == "add") {
-                    addi("$t2", "$t0", to_string(temp_sym_focus[pc.op1]));
-                    sw("$t2", addr1, base_reg1);
+                    if (temp_sym_focus[pc.op1] == 0 && o1) {
+                        sw("$t0", addr1, base_reg1);
+                    }
+                    else {
+                        addi("$t2", "$t0", to_string(temp_sym_focus[pc.op1]));
+                        sw("$t2", addr1, base_reg1);
+                    }
                 } else if (pc.type == "sub") {
                     li("$t1", to_string(temp_sym_focus[pc.op1]));
                     sub("$t2", "$t1", "$t0");
                     sw("$t2", addr1, base_reg1);
                 } else if (pc.type == "mult") {
-                    li("$t1", to_string(temp_sym_focus[pc.op1]));
-                    mult("$t0", "$t1");
-                    mflo("$t0");
-                    sw("$t0", addr1, base_reg1);
+                    if (temp_sym_focus[pc.op1] == 1 && o1) {
+                        sw("$t0", addr1, base_reg1);
+                    }
+                    else if (o1 && get_log(temp_sym_focus[pc.op1]) > 0) {
+                        if (temp_sym_focus[pc.op1] < 0) neg("$t0", "$t0");
+                        sll("$t0", "$t0", to_string(get_log(temp_sym_focus[pc.op1])));
+                        sw("$t0", addr1, base_reg1);
+                    }
+                    else {
+                        li("$t1", to_string(temp_sym_focus[pc.op1]));
+                        mult("$t0", "$t1");
+                        mflo("$t0");
+                        sw("$t0", addr1, base_reg1);
+                    }
                 } else if (pc.type == "div") {
                     li("$t1", to_string(temp_sym_focus[pc.op1]));
                     div("$t1", "$t0");
@@ -257,9 +338,9 @@ void qcodes2mips() {
                     sw("$t0", addr1, base_reg1);
                 }
             }
+            else if (o1);
             else {
                 int addr1 = temp_sym_tab[pc.dst];
-                int addr2 = temp_sym_tab[pc.op1];
                 string base_reg1 = "$sp";
                 if (temp_sym_glob[pc.dst]) base_reg1 = data_base;
 
@@ -292,24 +373,13 @@ void qcodes2mips() {
             string base_reg2 = "$sp";
             if (temp_sym_glob[pc.op1]) base_reg2 = data_base;
 
-            if (temp_sym_const[pc.op1]) li("$t0", to_string(temp_sym_focus[pc.op1]));
-            else lw("$t0", addr2, base_reg2);
-            neg("$t1", "$t0");
-            sw("$t1", addr1, base_reg1);
-        }
-        else if (pc.type == "multi") {
-            current_top += 4;
-            int addr1 = temp_sym_tab[pc.dst];
-            string base_reg1 = "$sp";
-            if (temp_sym_glob[pc.dst]) base_reg1 = data_base;
-            if (temp_sym_const[pc.op1]) {
-                li("$t1", to_string(temp_sym_focus[pc.op1]));
+            if (temp_sym_const[pc.op1] && o1) ;
+            else {
+                if (temp_sym_const[pc.op1]) li("$t0", to_string(temp_sym_focus[pc.op1]));
+                else lw("$t0", addr2, base_reg2);
+                neg("$t1", "$t0");
+                sw("$t1", addr1, base_reg1);
             }
-            else lw("$t1", addr1, base_reg1);
-            li("$t0", pc.op2);
-            mult("$t0", "$t1");
-            mflo("$t0");
-            sw("$t0", addr1, base_reg1);
         }
         else if (pc.type == "lod") {
             if (!start_with(pc.op1, "@")) {
@@ -332,7 +402,8 @@ void qcodes2mips() {
             string base_reg3 = "$sp";
             if (temp_sym_glob[pc.op2]) base_reg3 = data_base;
 
-            lw("$t0", off_addr, base_reg3);
+            if (temp_sym_const[pc.op2]) li("$t0", to_string(temp_sym_focus[pc.op2]));
+            else lw("$t0", off_addr, base_reg3);
             addi("$t1", "$t0", to_string(src_addr));
             lw("$t0", "$t1", base_reg2);
             sw("$t0", dst_addr, base_reg1);
@@ -369,19 +440,23 @@ void qcodes2mips() {
         }
         else if (pc.type == "print_v_int") {
             int dst_addr = temp_sym_tab[pc.dst];
+            string base_reg = "$sp";
+            if (temp_sym_glob[pc.dst]) base_reg = "$a3";
             if (temp_sym_const[pc.dst]) {
                 li("$a0", to_string(temp_sym_focus[pc.dst]));
             }
-            else lw("$a0", dst_addr, "$sp");
+            else lw("$a0", dst_addr, base_reg);
             li("$v0", "1");
             syscall();
         }
         else if (pc.type == "print_v_char") {
             int dst_addr = temp_sym_tab[pc.dst];
+            string base_reg = "$sp";
+            if (temp_sym_glob[pc.dst]) base_reg = "$a3";
             if (temp_sym_const[pc.dst]) {
                 li("$a0", to_string(temp_sym_focus[pc.dst]));
             }
-            else lw("$a0", dst_addr, "$sp");
+            else lw("$a0", dst_addr, base_reg);
             li("$v0", "11");
             syscall();
         }

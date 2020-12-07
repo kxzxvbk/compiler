@@ -883,12 +883,14 @@ void g_assign_sentence() {
     // brackets
     if (sym.get_type() == 35) {
         sym = getsym();
-        g_expr();
+        int type1 = g_expr();
+        if (type1 != 1) g_error(sym.get_line_n(), 'i');
         if (sym.get_type() != 36) g_error(sym.get_line_n(), 'm');
         else sym = getsym();
         if (sym.get_type() == 35) {
             sym = getsym();
-            g_expr();
+            type1 = g_expr();
+            if (type1 != 1) g_error(sym.get_line_n(), 'i');
             if (sym.get_type() != 36) g_error(sym.get_line_n(), 'm');
             else sym = getsym();
             shape = 2;
@@ -1067,7 +1069,7 @@ void g_case_sub_sentence(int cur_lab_num, int case_num) {
     sym = getsym();
     int case_const = get_const();
     emit("li", to_string(case_const));
-    emit("set_label", to_string(cur_lab_num) + "_" + to_string(case_num));
+    if (case_num != 1) emit("set_label", to_string(cur_lab_num) + "_" + to_string(case_num));
     emit("branch_no_get", "4",
          "set_label_" +  to_string(cur_lab_num) + "_" + to_string(case_num+1));
     int case_type;
