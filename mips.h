@@ -32,6 +32,9 @@
 
 static string random_key = "Wh1tBA12H_";
 
+void write_back_all_t();
+void write_back_all_s();
+
 map<string, int> temp_sym_tab;
 map<string ,bool> temp_sym_glob;
 map<string, bool> temp_sym_const;
@@ -91,14 +94,16 @@ void push_quot(const string& new_name, const string& old_name, bool is_global) {
     }
 }
 
-void push_func(string name) {
+void push_func(const string& name) {
     temp_func_tab[name] = top_index;
 }
 
-void push_const(string name, int value) {
+void push_const(const string& name, int value) {
     temp_sym_const[name] = true;
     temp_sym_focus[name] = value;
 }
+
+bool is_temp_var(const string& name);
 
 static int string_count = 0;
 static int s_count = 0;
@@ -121,12 +126,22 @@ void set_temp_sym_tab() {
     for (iterator = qcodes.cbegin(); iterator != qcodes.cend(); iterator++) {
         Quardcode pc = *iterator;
         if (pc.type == "add" || pc.type == "sub" || pc.type == "mult" || pc.type == "div") {
-            if (temp_sym_const[pc.op1] && temp_sym_const[pc.op2] && o1) {
+            // 出现非单的情况
+            if (pc.dst == pc.op1 || pc.dst == pc.op2) {
+                if (is_temp_var(pc.dst) && temp_sym_const[pc.op1] && temp_sym_const[pc.op2] && o1) {
+                    if (pc.type == "add") push_const(pc.dst, temp_sym_focus[pc.op1] + temp_sym_focus[pc.op2]);
+                    else if (pc.type == "sub") push_const(pc.dst, temp_sym_focus[pc.op1] - temp_sym_focus[pc.op2]);
+                    else if (pc.type == "mult") push_const(pc.dst, temp_sym_focus[pc.op1] * temp_sym_focus[pc.op2]);
+                    else if (pc.type == "div") push_const(pc.dst, temp_sym_focus[pc.op1] / temp_sym_focus[pc.op2]);
+                }
+            }
+            else if (temp_sym_const[pc.op1] && temp_sym_const[pc.op2] && o1 && is_temp_var(pc.dst)) {
                 if (pc.type == "add") push_const(pc.dst, temp_sym_focus[pc.op1] + temp_sym_focus[pc.op2]);
                 else if (pc.type == "sub") push_const(pc.dst, temp_sym_focus[pc.op1] - temp_sym_focus[pc.op2]);
                 else if (pc.type == "mult") push_const(pc.dst, temp_sym_focus[pc.op1] * temp_sym_focus[pc.op2]);
                 else if (pc.type == "div") push_const(pc.dst, temp_sym_focus[pc.op1] / temp_sym_focus[pc.op2]);
             }
+            else if (temp_sym_tab.find(pc.dst) != temp_sym_tab.end());
             else push_tab(pc.dst, 4, is_glob);
         }
         else if (pc.type == "multi_rep" ) {
@@ -145,7 +160,7 @@ void set_temp_sym_tab() {
             push_const(pc.dst, str2int(pc.op1));
         }
         else if (pc.type == "allocate"
-        || pc.type == "allocate_init" || pc.type == "var") {
+                 || pc.type == "allocate_init" || pc.type == "var") {
             int size = str2int(pc.op2);
             push_tab(pc.op1, size, is_glob);
         } else if (pc.type == "set_function_flag") {
@@ -180,32 +195,57 @@ void qcodes2mips() {
         Quardcode pc = *iterator;
         mout << "# " + pc.to_string() << endl;
         if (pc.type == "add" || pc.type == "sub" || pc.type == "mult" || pc.type == "div"
-        || pc.type == "multi_rep") {
+            || pc.type == "multi_rep") {
             current_top += 4;
             if (pc.type == "multi_rep") {
                 int addr = temp_sym_tab[pc.op1];
                 string base_reg = "$sp";
+                string reg_name_dst;
+
                 if (temp_sym_glob[pc.op1]) base_reg = data_base;
 
                 int addr1 = temp_sym_tab[pc.dst];
                 string base_reg1 = "$sp";
                 if (temp_sym_glob[pc.dst]) base_reg = data_base;
 
-                if (temp_sym_const[pc.op1] && o1);
+                if (temp_sym_const[pc.op1] && o1) {
+                    if (temp_sym_const[pc.dst]);
+                    else {
+                        reg_name_dst = "$t0";
+                        li(reg_name_dst, to_string(temp_sym_focus[pc.op1] * str2int(pc.op2)));
+                    }
+                }
                 else {
-                    if (temp_sym_const[pc.op1]) li("$t0", to_string(temp_sym_focus[pc.op1]));
-                    else lw("$t0", addr, base_reg);
+                    string reg_name0;
+                    string reg_name1;
+                    string reg_name_dst;
+
+                    reg_name0 = "$t0";
+                    if (temp_sym_const[pc.op1]) {
+                        li(reg_name0, to_string(temp_sym_focus[pc.op1]));
+                    }
+                    else {
+                        lw(reg_name0, addr, base_reg);
+                    }
                     int con = str2int(pc.op2);
+
+                    reg_name_dst = "$t2";
                     if (o1 && get_log(con) > 0) {
-                        if (con < 0) neg("$t0", "$t0");
-                        sll("$t0", "$t0", to_string(get_log(con)));
+                        if (con < 0) {
+                            neg("$a2", reg_name0);
+                            sll(reg_name_dst, "$a2", to_string(get_log(con)));
+                        }
+                        else sll(reg_name_dst, reg_name0, to_string(get_log(con)));
                     }
                     else if (pc.op2 != "1" || !o1) {
-                        li("$t1", pc.op2);
-                        mult("$t0", "$t1");
-                        mflo("$t0");
+                        reg_name1 = "$t1";
+                        li(reg_name1, pc.op2);
+                        mult(reg_name0, reg_name1);
+                        mflo(reg_name_dst);
+                    } else {
+                        mv(reg_name_dst, reg_name0);
                     }
-                    sw("$t0", addr1, base_reg1);
+                    sw(reg_name_dst, addr1, base_reg1);
                 }
             }
             else if (!temp_sym_const[pc.op2] && !temp_sym_const[pc.op1]) {
@@ -219,23 +259,30 @@ void qcodes2mips() {
                 string base_reg3 = "$sp";
                 if (temp_sym_glob[pc.op2]) base_reg3 = data_base;
 
-                lw("$t0", addr2, base_reg2);
-                lw("$t1", addr3, base_reg3);
+                string reg_name0;
+                string reg_name1;
+                string reg_name_dst;
+
+                reg_name0 = "$t0";
+                reg_name1 = "$t1";
+                reg_name_dst = "$t2";
+                lw(reg_name0, addr2, base_reg2);
+                lw(reg_name1, addr3, base_reg3);
 
                 if (pc.type == "add") {
-                    add("$t2", "$t0", "$t1");
-                    sw("$t2", addr1, base_reg1);
+                    add(reg_name_dst, reg_name0, reg_name1);
+                    sw(reg_name_dst, addr1, base_reg1);
                 } else if (pc.type == "sub") {
-                    sub("$t2", "$t0", "$t1");
-                    sw("$t2", addr1, base_reg1);
+                    sub(reg_name_dst, reg_name0, reg_name1);
+                    sw(reg_name_dst, addr1, base_reg1);
                 } else if (pc.type == "mult") {
-                    mult("$t0", "$t1");
-                    mflo("$t0");
-                    sw("$t0", addr1, base_reg1);
+                    mult(reg_name0, reg_name1);
+                    mflo(reg_name_dst);
+                    sw(reg_name_dst, addr1, base_reg1);
                 } else if (pc.type == "div") {
-                    div("$t0", "$t1");
-                    mflo("$t0");
-                    sw("$t0", addr1, base_reg1);
+                    div(reg_name0, reg_name1);
+                    mflo(reg_name_dst);
+                    sw(reg_name_dst, addr1, base_reg1);
                 }
             }
             else if (!temp_sym_const[pc.op1]){
@@ -246,52 +293,68 @@ void qcodes2mips() {
                 string base_reg2 = "$sp";
                 if (temp_sym_glob[pc.op1]) base_reg2 = data_base;
 
-                lw("$t0", addr2, base_reg2);
+                string reg_name0;
+                string reg_name1;
+                string reg_name_dst;
+
+                reg_name0 = "$t0";
+                reg_name_dst = "$t2";
+                lw(reg_name0, addr2, base_reg2);
                 if (pc.type == "add") {
                     if (temp_sym_focus[pc.op2] == 0 && o1) {
-                        sw("$t0", addr1, base_reg1);
+                        sw(reg_name0, addr1, base_reg1);
                     }
                     else {
-                        addi("$t2", "$t0", to_string(temp_sym_focus[pc.op2]));
-                        sw("$t2", addr1, base_reg1);
+                        addi(reg_name_dst, reg_name0, to_string(temp_sym_focus[pc.op2]));
+                        sw(reg_name_dst, addr1, base_reg1);
                     }
                 } else if (pc.type == "sub") {
                     if (temp_sym_focus[pc.op2] == 0 && o1) {
-                        sw("$t0", addr1, base_reg1);
+                        sw(reg_name0, addr1, base_reg1);
                     }
                     else {
-                        sub("$t2", "$t0", to_string(temp_sym_focus[pc.op2]));
-                        sw("$t2", addr1, base_reg1);
+                        subi(reg_name_dst, reg_name0, to_string(temp_sym_focus[pc.op2]));
+                        sw(reg_name_dst, addr1, base_reg1);
                     }
                 } else if (pc.type == "mult") {
                     if (temp_sym_focus[pc.op2] == 1 && o1) {
-                        sw("$t0", addr1, base_reg1);
+                        mv(reg_name_dst, reg_name0);
+                        sw(reg_name0, addr1, base_reg1);
                     }
                     else if (o1 && get_log(temp_sym_focus[pc.op2]) > 0) {
-                        if (temp_sym_focus[pc.op2] < 0) neg("$t0", "$t0");
-                        sll("$t0", "$t0", to_string(get_log(temp_sym_focus[pc.op2])));
-                        sw("$t0", addr1, base_reg1);
+                        if (temp_sym_focus[pc.op2] < 0) {
+                            neg("$a2", reg_name0);
+                            sll(reg_name_dst, "$a2", to_string(get_log(temp_sym_focus[pc.op2])));
+                        }
+                        else sll(reg_name_dst, reg_name0, to_string(get_log(temp_sym_focus[pc.op2])));
+                        sw(reg_name_dst, addr1, base_reg1);
                     }
                     else {
-                        li("$t1", to_string(temp_sym_focus[pc.op2]));
-                        mult("$t0", "$t1");
-                        mflo("$t0");
-                        sw("$t0", addr1, base_reg1);
+                        reg_name1 = "$t1";
+                        li(reg_name1, to_string(temp_sym_focus[pc.op2]));
+                        mult(reg_name0, reg_name1);
+                        mflo(reg_name_dst);
+                        sw(reg_name_dst, addr1, base_reg1);
                     }
                 } else if (pc.type == "div") {
                     if (temp_sym_focus[pc.op2] == 1 && o1) {
-                        sw("$t0", addr1, base_reg1);
+                        mv(reg_name_dst, reg_name0);
+                        sw(reg_name0, addr1, base_reg1);
                     }
                     else if (o1 && get_log(temp_sym_focus[pc.op2]) > 0) {
-                        if (temp_sym_focus[pc.op2] < 0) neg("$t0", "$t0");
-                        sra("$t0", "$t0", to_string(get_log(temp_sym_focus[pc.op2])));
-                        sw("$t0", addr1, base_reg1);
+                        if (temp_sym_focus[pc.op2] < 0) {
+                            neg("$a2", reg_name0);
+                            sra(reg_name_dst, "$a2", to_string(get_log(temp_sym_focus[pc.op2])));
+                        }
+                        else sra(reg_name_dst, reg_name0, to_string(get_log(temp_sym_focus[pc.op2])));
+                        sw(reg_name_dst, addr1, base_reg1);
                     }
                     else {
-                        li("$t1", to_string(temp_sym_focus[pc.op2]));
-                        div("$t0", "$t1");
-                        mflo("$t0");
-                        sw("$t0", addr1, base_reg1);
+                        reg_name1 = "$t1";
+                        li(reg_name1, to_string(temp_sym_focus[pc.op2]));
+                        div(reg_name0, reg_name1);
+                        mflo(reg_name_dst);
+                        sw(reg_name_dst, addr1, base_reg1);
                     }
                 }
             }
@@ -303,42 +366,69 @@ void qcodes2mips() {
                 string base_reg2 = "$sp";
                 if (temp_sym_glob[pc.op2]) base_reg2 = data_base;
 
-                lw("$t0", addr2, base_reg2);
+                string reg_name0;
+                string reg_name1;
+                string reg_name_dst;
+
+                reg_name0 = "$t0";
+                reg_name_dst = "$t2";
+                lw(reg_name0, addr2, base_reg2);
                 if (pc.type == "add") {
                     if (temp_sym_focus[pc.op1] == 0 && o1) {
-                        sw("$t0", addr1, base_reg1);
+                        mv(reg_name_dst, reg_name0);
+                        sw(reg_name0, addr1, base_reg1);
                     }
                     else {
-                        addi("$t2", "$t0", to_string(temp_sym_focus[pc.op1]));
-                        sw("$t2", addr1, base_reg1);
+                        addi(reg_name_dst, reg_name0, to_string(temp_sym_focus[pc.op1]));
+                        sw(reg_name_dst, addr1, base_reg1);
                     }
                 } else if (pc.type == "sub") {
-                    li("$t1", to_string(temp_sym_focus[pc.op1]));
-                    sub("$t2", "$t1", "$t0");
-                    sw("$t2", addr1, base_reg1);
+                    reg_name1 = "$t1";
+                    li(reg_name1, to_string(temp_sym_focus[pc.op1]));
+                    sub(reg_name_dst, reg_name1, reg_name0);
+                    sw(reg_name_dst, addr1, base_reg1);
                 } else if (pc.type == "mult") {
                     if (temp_sym_focus[pc.op1] == 1 && o1) {
-                        sw("$t0", addr1, base_reg1);
+                        mv(reg_name_dst, reg_name0);
+                        sw(reg_name_dst, addr1, base_reg1);
                     }
                     else if (o1 && get_log(temp_sym_focus[pc.op1]) > 0) {
-                        if (temp_sym_focus[pc.op1] < 0) neg("$t0", "$t0");
-                        sll("$t0", "$t0", to_string(get_log(temp_sym_focus[pc.op1])));
-                        sw("$t0", addr1, base_reg1);
+                        if (temp_sym_focus[pc.op1] < 0) {
+                            neg("$a2", reg_name0);
+                            sll(reg_name_dst, "$a2", to_string(get_log(temp_sym_focus[pc.op1])));
+                        }
+                        else sll(reg_name_dst, reg_name0, to_string(get_log(temp_sym_focus[pc.op1])));
+                        sw(reg_name_dst, addr1, base_reg1);
                     }
                     else {
-                        li("$t1", to_string(temp_sym_focus[pc.op1]));
-                        mult("$t0", "$t1");
-                        mflo("$t0");
-                        sw("$t0", addr1, base_reg1);
+                        reg_name1 = "$t1";
+                        li(reg_name1, to_string(temp_sym_focus[pc.op1]));
+                        mult(reg_name0, reg_name1);
+                        mflo(reg_name_dst);
+                        sw(reg_name_dst, addr1, base_reg1);
                     }
                 } else if (pc.type == "div") {
-                    li("$t1", to_string(temp_sym_focus[pc.op1]));
-                    div("$t1", "$t0");
-                    mflo("$t0");
-                    sw("$t0", addr1, base_reg1);
+                    reg_name1 = "$t1";
+                    li(reg_name1, to_string(temp_sym_focus[pc.op1]));
+                    div(reg_name1,reg_name0);
+                    mflo(reg_name_dst);
+                    sw(reg_name_dst, addr1, base_reg1);
                 }
             }
-            else if (o1);
+            else if (o1) {
+                string reg_name_dst;
+                if (temp_sym_const[pc.dst]);
+                else {
+                    reg_name_dst = "$t0";
+                    string base_reg = "$sp";
+                    if (temp_sym_glob[pc.dst]) base_reg = data_base;
+                    if (pc.type == "add") li(reg_name_dst, to_string(temp_sym_focus[pc.op1] + temp_sym_focus[pc.op2]));
+                    else if (pc.type == "sub") li(reg_name_dst, to_string(temp_sym_focus[pc.op1] - temp_sym_focus[pc.op2]));
+                    else if (pc.type == "mult") li(reg_name_dst, to_string(temp_sym_focus[pc.op1] * temp_sym_focus[pc.op2]));
+                    else if (pc.type == "div") li(reg_name_dst, to_string(temp_sym_focus[pc.op1] / temp_sym_focus[pc.op2]));
+                    sw(reg_name_dst, temp_sym_tab[pc.dst], base_reg);
+                }
+            }
             else {
                 int addr1 = temp_sym_tab[pc.dst];
                 string base_reg1 = "$sp";
@@ -373,21 +463,38 @@ void qcodes2mips() {
             string base_reg2 = "$sp";
             if (temp_sym_glob[pc.op1]) base_reg2 = data_base;
 
+            string reg_name0;
+            string reg_name1;
+            string reg_name_dst;
+
             if (temp_sym_const[pc.op1] && o1) ;
             else {
-                if (temp_sym_const[pc.op1]) li("$t0", to_string(temp_sym_focus[pc.op1]));
-                else lw("$t0", addr2, base_reg2);
-                neg("$t1", "$t0");
-                sw("$t1", addr1, base_reg1);
+                if (temp_sym_const[pc.op1]) {
+                    reg_name0 = "$t0";
+                    li(reg_name0, to_string(temp_sym_focus[pc.op1]));
+                }
+                else {
+                    reg_name0 = "$t0";
+                    lw(reg_name0, addr2, base_reg2);
+                }
+                reg_name_dst = "$t1";
+                neg(reg_name_dst, reg_name0);
+                sw(reg_name_dst, addr1, base_reg1);
             }
         }
         else if (pc.type == "lod") {
+            string reg_name0;
+            string reg_name_dst;
             if (!start_with(pc.op1, "@")) {
-                if (temp_sym_const[pc.op1]) li("$t0", to_string(temp_sym_focus[pc.op1]));
-                else lw("$t0", temp_sym_tab[pc.op1], data_base);
+                reg_name0 = "$t0";
+                reg_name_dst = "$t1";
+                if (temp_sym_const[pc.op1]) li(reg_name0, to_string(temp_sym_focus[pc.op1]));
+                else lw(reg_name0, temp_sym_tab[pc.op1], data_base);
                 string base_reg = "$sp";
+
+                mv(reg_name_dst, reg_name0);
                 if (temp_sym_glob[pc.dst]) base_reg = data_base;
-                if (pc.op1 != "std::endl") sw("$t0", temp_sym_tab[pc.dst], base_reg);
+                if (pc.op1 != "std::endl") sw(reg_name0, temp_sym_tab[pc.dst], base_reg);
             }
         }
         else if (pc.type == "lod_off") {
@@ -402,11 +509,17 @@ void qcodes2mips() {
             string base_reg3 = "$sp";
             if (temp_sym_glob[pc.op2]) base_reg3 = data_base;
 
-            if (temp_sym_const[pc.op2]) li("$t0", to_string(temp_sym_focus[pc.op2]));
-            else lw("$t0", off_addr, base_reg3);
-            addi("$t1", "$t0", to_string(src_addr));
-            lw("$t0", "$t1", base_reg2);
-            sw("$t0", dst_addr, base_reg1);
+            string reg_name0;
+            string reg_name_dst;
+
+            reg_name0 = "$t0";
+            if (temp_sym_const[pc.op2]) li(reg_name0, to_string(temp_sym_focus[pc.op2]));
+            else lw(reg_name0, off_addr, base_reg3);
+            addi("$a2", reg_name0, to_string(src_addr));
+
+            reg_name_dst = "$t1";
+            lw(reg_name_dst, "$a2", base_reg2);
+            sw(reg_name_dst, dst_addr, base_reg1);
         }
         else if (pc.type == "allocate") {
             current_top += str2int(pc.op2);
@@ -419,8 +532,8 @@ void qcodes2mips() {
         else if (pc.type == "initialize_a") {
             int base_addr = temp_sym_tab[pc.dst];
             for (int i = 0;i < pc.arr.size();i++) {
-                li("$t0", to_string(pc.arr[i]));
-                sw("$t0", (base_addr+4*i), "$sp");
+                li("$a2", to_string(pc.arr[i]));
+                sw("$a2", (base_addr+4*i), "$sp");
             }
         }
         else if (pc.type == "li") {
@@ -503,9 +616,16 @@ void qcodes2mips() {
             string base_reg1 = "$sp";
             if (temp_sym_glob[pc.op1]) base_reg1 = data_base;
 
-            if (temp_sym_const[pc.op1]) li("$t0", to_string(temp_sym_focus[pc.op1]));
-            else lw("$t0", src_addr, base_reg1);
-            sw("$t0", dst_addr, base_reg2);
+            string reg_name0;
+            string reg_name_dst;
+
+            reg_name0 = "$t0";
+            if (temp_sym_const[pc.op1]) li(reg_name0, to_string(temp_sym_focus[pc.op1]));
+            else lw(reg_name0, src_addr, base_reg1);
+
+            reg_name_dst = "$t1";
+            mv(reg_name_dst, reg_name0);
+            sw(reg_name_dst, dst_addr, base_reg2);
         }
         else if (pc.type == "assign_off") {
             int dst_addr = temp_sym_tab[pc.dst];
@@ -518,32 +638,50 @@ void qcodes2mips() {
             string base_reg3 = "$sp";
             if (temp_sym_glob[pc.op2]) base_reg3 = data_base;
 
-            if (temp_sym_const[pc.op2]) li("$t0", to_string(temp_sym_focus[pc.op2]));
-            else lw("$t0", off_addr, base_reg3);
-            addi("$t1", "$t0", to_string(dst_addr));
-            if (temp_sym_const[pc.op1]) li("$t0", to_string(temp_sym_focus[pc.op1]));
-            else lw("$t0", src_addr, base_reg2);
-            sw("$t0", "$t1", base_reg1);
+            string reg_name0; // offset
+            string reg_name1; // value
+            string reg_name_dst;
+
+            reg_name0 = "$t0";
+            if (temp_sym_const[pc.op2]) li(reg_name0, to_string(temp_sym_focus[pc.op2]));
+            else lw(reg_name0, off_addr, base_reg3);
+            addi("$a2", reg_name0, to_string(dst_addr));
+
+            reg_name1 = "$t1";
+            if (temp_sym_const[pc.op1]) li(reg_name1, to_string(temp_sym_focus[pc.op1]));
+            else lw(reg_name1, src_addr, base_reg2);
+
+            reg_name_dst = "$t2";
+            mv(reg_name_dst, reg_name1);
+            sw(reg_name_dst, "$a2", base_reg1);
         }
         else if (pc.type == "set_label") {
             set_flag(pc.type + "_" + pc.dst);
         }
         else if (pc.type == "beq" || pc.type == "bne" || pc.type == "ble" ||
-        pc.type == "blt" || pc.type == "bge" || pc.type == "bgt") {
+                 pc.type == "blt" || pc.type == "bge" || pc.type == "bgt") {
             int addr1 = temp_sym_tab[pc.op1];
             int addr2 = temp_sym_tab[pc.op2];
             string base_reg1 = "$sp";
             if (temp_sym_glob[pc.op1]) base_reg1 = data_base;
             string base_reg2 = "$sp";
             if (temp_sym_glob[pc.op2]) base_reg2 = data_base;
-            if (temp_sym_const[pc.op1]) li("$t0", to_string(temp_sym_focus[pc.op1]));
-            else lw("$t0", addr1, base_reg1);
+
+            string reg_name0;
+            string reg_name1;
+
+            reg_name0 = "$t0";
+            if (temp_sym_const[pc.op1]) li(reg_name0, to_string(temp_sym_focus[pc.op1]));
+            else lw(reg_name0, addr1, base_reg1);
             if (temp_sym_const[pc.op2]) {
-                branch(pc.type, "$t0", to_string(temp_sym_focus[pc.op2]), pc.dst);
+                branch(pc.type, reg_name0, to_string(temp_sym_focus[pc.op2]), pc.dst);
                 continue;
             }
-            else lw("$t1", addr2, base_reg2);
-            branch(pc.type, "$t0", "$t1", pc.dst);
+            else {
+                reg_name1 = "$t1";
+                lw("$t1", addr2, base_reg2);
+            }
+            branch(pc.type, reg_name0, reg_name1, pc.dst);
 
         }
         else if (pc.type == "jump") {
@@ -553,10 +691,13 @@ void qcodes2mips() {
             int addr1 = temp_sym_tab[pc.dst];
             string base_reg1 = "$sp";
             if (temp_sym_glob[pc.dst]) base_reg1 = data_base;
-            lw("$t0", addr1, base_reg1);
-            if (pc.op1 == "0") addi("$t0", "$t0", pc.op2);
-            else subi("$t0", "$t0", pc.op2);
-            sw("$t0", addr1, base_reg1);
+
+            string reg_name0;
+            reg_name0 = "$t0";
+            lw(reg_name0, addr1, base_reg1);
+            if (pc.op1 == "0") addi(reg_name0,reg_name0, pc.op2);
+            else subi(reg_name0, reg_name0, pc.op2);
+            sw(reg_name0, addr1, base_reg1);
         }
         else if (pc.type == "call") {
             over_flow_index = 0;
@@ -568,11 +709,13 @@ void qcodes2mips() {
         }
         else if (pc.type == "push") {
             over_flow_index += 4;
-            if (temp_sym_const[pc.dst]) li("$t0", to_string(temp_sym_focus[pc.dst]));
-            else if (temp_sym_glob[pc.dst]) lw("$t0", temp_sym_tab[pc.dst], data_base);
-            else lw("$t0", temp_sym_tab[pc.dst], "$sp");
+            string reg_name0;
+            reg_name0 = "$t0";
+            if (temp_sym_const[pc.dst]) li(reg_name0, to_string(temp_sym_focus[pc.dst]));
+            else if (temp_sym_glob[pc.dst]) lw(reg_name0, temp_sym_tab[pc.dst], data_base);
+            else lw(reg_name0, temp_sym_tab[pc.dst], "$sp");
 
-            sw("$t0", over_flow_index - down_move_length - 4, "$sp");
+            sw(reg_name0, over_flow_index - down_move_length - 4, "$sp");
         }
         else if (pc.type == "return") {
             // set RETURN_VAL
@@ -591,11 +734,179 @@ void qcodes2mips() {
         else if (pc.type == "set_down_move") {
             down_move_length = temp_func_tab[pc.dst];
         }
-        else {
-                cout << pc.to_string() << endl;
-                cout << "#####FATAL ERROR#####";
-            }
+        else if (pc.type == "clear_all") {
+            ;
         }
+        else {
+            cout << pc.to_string() << endl;
+            cout << "#####FATAL ERROR#####";
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// register pool
+/*
+ * 使用寄存器流程：
+ * 1、程序初始时，要初始化：init_reg_pool()
+ * 2、现有一个变量var要加载到寄存器中：
+ * if (o) {
+ *     bool in_reg = true;
+ *     string reg_name = get_allocated_reg(var);
+ *     if (reg_name.size() == 0) {
+ *         in_reg = false;
+ *         reg_name = read_allocate_reg(name);
+ *         /////////////////
+ *         ///lw，li操作/////
+ *         /////////////////
+ *     }
+ * } else {
+ *     /////////////////
+ *     ///lw，li操作/////
+ *     /////////////////
+ * }
+ * 3、回写策略
+ *    该寄存器被换走，或者函数调用
+ */
+
+
+static string s_regs[8];
+static int s_pointer = 0;
+static bool s_reserved[8];
+static string t_regs[10];
+static int t_pointer = 0;
+static bool t_reserved[10];
+
+bool is_temp_var(const string& name) {
+    int count = 0;
+    for (char i : name) {
+        if (i == '@') count++;
+    }
+    return count == 1;
+}
+
+void init_reg_pool() {
+    for (int i = 0;i < 8;i++) {
+        s_regs[i] = "";
+        s_reserved[i] = false;
+    }
+    for (int i = 0;i < 10;i++) {
+        t_regs[i] = "";
+        t_reserved[i] = false;
+    }
+}
+
+string get_allocated_reg(const string& name) {
+    int i;
+    for (i = 0;i < 8;i++) {
+        if (s_regs[i] == name) {
+            string ans = "$s" + to_string(i);
+            s_reserved[i] = true;
+            return ans;
+        }
+    }
+    for (i = 0;i < 10;i++) {
+        if (t_regs[i] == name) {
+            string ans = "$s" + to_string(i);
+            t_reserved[i] = true;
+            return ans;
+        }
+    }
+    return "";
+}
+
+void write_back_all_t() {
+    for (t_pointer = 0;t_pointer < 10;t_pointer++) {
+        if (!t_regs[t_pointer].empty()) {
+            string write_back_var = t_regs[t_pointer];
+            string reg_name = "$t" + to_string(t_pointer);
+            string base_reg = "$sp";
+            if (temp_sym_glob[write_back_var]) base_reg = data_base;
+            sw(reg_name, temp_sym_tab[reg_name], base_reg);
+        }
+    }
+}
+
+void write_back_all_s() {
+    for (s_pointer = 0;s_pointer < 8;s_pointer++) {
+        if (!s_regs[s_pointer].empty()) {
+            string write_back_var = s_regs[s_pointer];
+            string reg_name = "$s" + to_string(s_pointer);
+            string base_reg = "$sp";
+            if (temp_sym_glob[write_back_var]) base_reg = data_base;
+            sw(reg_name, temp_sym_tab[reg_name], base_reg);
+        }
+    }
+}
+
+string read_allocate_reg(const string& name) {
+    string ans;
+    if (is_temp_var(name)) {
+        while (t_reserved[t_pointer]) {
+            t_pointer = (t_pointer + 1) % 10;
+        }
+        if (!t_regs[t_pointer].empty()) {
+            string write_back_var = t_regs[t_pointer];
+            string reg_name = "$t" + to_string(t_pointer);
+            string base_reg = "$sp";
+            if (temp_sym_glob[write_back_var]) base_reg = data_base;
+            sw(reg_name, temp_sym_tab[reg_name], base_reg);
+        }
+        t_regs[t_pointer] = name;
+        t_reserved[t_pointer] = true;
+        ans = "$t" + to_string(t_pointer);
+        t_pointer = (t_pointer + 1) % 10;
+    }
+    else {
+        while (s_reserved[s_pointer]) {
+            s_pointer = (s_pointer + 1) % 8;
+        }
+        if (!s_regs[s_pointer].empty()) {
+            string write_back_var = s_regs[s_pointer];
+            string reg_name = "$s" + to_string(s_pointer);
+            string base_reg = "$sp";
+            if (temp_sym_glob[write_back_var]) base_reg = data_base;
+            sw(reg_name, temp_sym_tab[reg_name], base_reg);
+        }
+        s_regs[s_pointer] = name;
+        s_reserved[s_pointer] = true;
+        ans = "$s" + to_string(s_pointer);
+        s_pointer = (s_pointer + 1) % 8;
+    }
+    return ans;
+}
+
+string write_allocate_reg(const string& name) {
+    string ans;
+    if (is_temp_var(name)) {
+        t_regs[t_pointer] = name;
+        t_reserved[t_pointer] = true;
+        ans = "$t" + to_string(t_pointer);
+        t_pointer = (t_pointer + 1) % 10;
+    }
+    else {
+        s_regs[s_pointer] = name;
+        s_reserved[s_pointer] = true;
+        ans = "$s" + to_string(s_pointer);
+        s_pointer = (s_pointer + 1) % 8;
+    }
+    return ans;
+}
+
+void flush_reservation() {
+    for (bool & i : s_reserved) {
+        i = false;
+    }
+    for (bool & i : t_reserved) {
+        i = false;
+    }
+}
+
+void clear_all() {
+    init_reg_pool();
 }
 
 #endif //UNTITLED_MIPS_H

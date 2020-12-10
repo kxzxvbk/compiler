@@ -14,6 +14,7 @@ bool t3 = false;
 bool t4 = false;
 bool o1 = true;
 bool o2 = true;
+bool o3 = false;
 
 
 ofstream fout("output.txt");

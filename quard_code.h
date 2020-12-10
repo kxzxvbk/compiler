@@ -99,11 +99,12 @@ public:
         if (type == "call") return type + " " + dst;
         if (type == "pop back") return type;
         if (type == "shut down") return type;
-        if (type == "set_post_process") return type;
+        if (type == "set_post_process") return type + " " + dst + " " + op2;
         if (type == "print_endl") return type;
         if (type == "multi_rep") return dst + "=" + op1 + " " + "*" + " " + op2;
         if (type == "neg") return dst + "=-" + op1;
-        if (type == "set_down_move") return type + dst;
+        if (type == "set_down_move") return type + " " + dst;
+        if (type == "clear_all") return type;
         cout << type << "#####FATAL ERROR#####";
         return "";
     }
@@ -295,22 +296,28 @@ void pcode2quardcode() {
             if (pc.type != "branch_no_get") op_stack.pop_back();
             if (pc.op1 == "0") {
                 // 小于
-                qcodes.emplace_back("bge", pc.op2, pc.arr, op1, op2);
+                if (pc.op3 == "no_reverse") qcodes.emplace_back("blt", pc.op2, pc.arr, op1, op2);
+                else qcodes.emplace_back("bge", pc.op2, pc.arr, op1, op2);
             } else if (pc.op1 == "1") {
                 // 小于等于
-                qcodes.emplace_back("bgt", pc.op2, pc.arr, op1, op2);
+                if (pc.op3 == "no_reverse") qcodes.emplace_back("ble", pc.op2, pc.arr, op1, op2);
+                else qcodes.emplace_back("bgt", pc.op2, pc.arr, op1, op2);
             } else if (pc.op1 == "2") {
                 // 大于
-                qcodes.emplace_back("ble", pc.op2, pc.arr, op1, op2);
+                if (pc.op3 == "no_reverse") qcodes.emplace_back("bgt", pc.op2, pc.arr, op1, op2);
+                else qcodes.emplace_back("ble", pc.op2, pc.arr, op1, op2);
             } else if (pc.op1 == "3") {
                 // 大于等于
-                qcodes.emplace_back("blt", pc.op2, pc.arr, op1, op2);
+                if (pc.op3 == "no_reverse") qcodes.emplace_back("bge", pc.op2, pc.arr, op1, op2);
+                else qcodes.emplace_back("blt", pc.op2, pc.arr, op1, op2);
             } else if (pc.op1 == "4") {
                 // 等于
-                qcodes.emplace_back("bne", pc.op2, pc.arr, op1, op2);
+                if (pc.op3 == "no_reverse") qcodes.emplace_back("beq", pc.op2, pc.arr, op1, op2);
+                else qcodes.emplace_back("bne", pc.op2, pc.arr, op1, op2);
             } else if (pc.op1 == "5") {
                 // 不等于
-                qcodes.emplace_back("beq", pc.op2, pc.arr, op1, op2);
+                if (pc.op3 == "no_reverse") qcodes.emplace_back("bne", pc.op2, pc.arr, op1, op2);
+                else qcodes.emplace_back("beq", pc.op2, pc.arr, op1, op2);
             }
         }
         else if (pc.type == "jump") {

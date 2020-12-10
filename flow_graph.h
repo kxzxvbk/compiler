@@ -38,18 +38,28 @@ private:
     void split_basic_blocks() {
         vector<Quardcode> qbuffer;
         int block_id = 1;
+        bool never_in = true;
         for (const auto& pc : qcodes) {
             // 跳转到的入口
             if (pc.type == "set_label" || pc.type == "set_function_flag") {
-                blocks.emplace_back(qbuffer);
-                entrance2id[pc.dst] = block_id;
-                block_id++;
-                qbuffer.clear();
+                if (pc.type == "set_function_flag" && !never_in) {
+                    never_in = false;
+                }
+                else {
+                    vector<int> arr_temp;
+                    qbuffer.push_back((Quardcode("clear_all", "", arr_temp, "", "")));
+                    blocks.emplace_back(qbuffer);
+                    entrance2id[pc.dst] = block_id;
+                    block_id++;
+                    qbuffer.clear();
+                }
             }
             // 有条件跳转语句
             else if (pc.type == "beq" || pc.type == "bne" || pc.type == "ble" ||
                      pc.type == "blt" || pc.type == "bge" || pc.type == "bgt") {
                 qbuffer.push_back(pc);
+                vector<int> arr_temp;
+                qbuffer.push_back((Quardcode("clear_all", "", arr_temp, "", "")));
                 blocks.emplace_back(qbuffer);
                 block_id++;
                 qbuffer.clear();
@@ -59,6 +69,8 @@ private:
             else if (pc.type == "jump" ||
                      pc.type == "return" || pc.type == "shut_down") {
                 qbuffer.push_back(pc);
+                vector<int> arr_temp;
+                qbuffer.push_back((Quardcode("clear_all", "", arr_temp, "", "")));
                 blocks.emplace_back(qbuffer);
                 block_id++;
                 qbuffer.clear();
@@ -67,7 +79,11 @@ private:
             qbuffer.push_back(pc);
         }
         // 程序结束也是一个入口语句
-        if (!qbuffer.empty()) blocks.emplace_back(qbuffer);
+        if (!qbuffer.empty()) {
+            blocks.emplace_back(qbuffer);
+            vector<int> arr_temp;
+            qbuffer.push_back((Quardcode("clear_all", "", arr_temp, "", "")));
+        }
     }
 
     void set_blocks_relations() {

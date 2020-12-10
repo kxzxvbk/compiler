@@ -50,29 +50,45 @@ void cache_emit() {
     buffer_on = true;
 }
 
-void flush_emit() {
+list<Pcode> get_cache() {
+    return buffer;
+}
+
+void close_cache() {
     buffer_on = false;
-    auto iterator_p = pcodes.begin();
-    pcodes.splice(iterator_p, buffer);
+}
+
+void clear_cache() {
+    buffer = list<Pcode>();
+    buffer_on = false;
 }
 
 void emit(string type, string op1="", string op2="", string op3="") {
     if (!buffer_on) pcodes.emplace_back(type, op1, op2, op3, vector<int>());
-    else buffer.emplace_back(type, op1, op2, op3, vector<int>());
+    else {
+        pcodes.emplace_back(type, op1, op2, op3, vector<int>());
+        buffer.emplace_back(type, op1, op2, op3, vector<int>());
+    }
     Pcode pc = pcodes.back();
     cout << pc.type << " " << pc.op1 << " " << pc.op2 << " " << pc.op3 << endl;
 }
 
 void emit(string type, vector<int> arr, string name="") {
     if (!buffer_on) pcodes.emplace_back(type, name, "", "", arr);
-    else buffer.emplace_back(type, name, "", "", arr);
+    else {
+        pcodes.emplace_back(type, name, "", "", arr);
+        buffer.emplace_back(type, name, "", "", arr);
+    }
     Pcode pc = pcodes.back();
     cout << pc.type << " " << pc.op1 << " " << pc.op2 << " " << pc.op3 << endl;
 }
 
 void emit(string type, vector<int> arr, string op1, string op2, string op3) {
     if (!buffer_on) pcodes.emplace_back(type, op1, op2, op3, arr);
-    else buffer.emplace_back(type, op1, op2, op3, arr);
+    else {
+        pcodes.emplace_back(type, op1, op2, op3, arr);
+        buffer.emplace_back(type, op1, op2, op3, arr);
+    }
     Pcode pc = pcodes.back();
     cout << pc.type << " " << pc.op1 << " " << pc.op2 << " " << pc.op3 << endl;
 }

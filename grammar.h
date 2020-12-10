@@ -967,17 +967,26 @@ void g_loop_sentence() {
 
         lab_count++;
         int temp_l_num = lab_count;
-        emit("set_label", to_string(temp_l_num));
 
         if (sym.get_type() != 33) g_error();
         sym = getsym();
+        cache_emit();
         int op_type = g_condition();
+        list<Pcode> condition = get_cache();
+        clear_cache();
+
         emit("branch", to_string(op_type), "set_label_end_label_" + to_string(temp_l_num));
+        emit("set_label", to_string(temp_l_num));
 
         if (sym.get_type() != 34) g_error((*temp_it).get_line_n(), 'l');
         else sym = getsym();
         g_sentence();
-        emit("jump", "set_label_" + to_string(temp_l_num));
+
+        for (Pcode &pcode : condition) {
+            pcodes.push_back(pcode);
+        }
+
+        emit("branch", to_string(op_type), "set_label_" + to_string(temp_l_num), "no_reverse");
         emit("end_label", to_string(temp_l_num));
     } else if (sym.get_type() == 15) {
         sym = getsym();
@@ -1002,12 +1011,16 @@ void g_loop_sentence() {
         // condition
         lab_count++;
         int temp_l_num = lab_count;
-        emit("set_label", to_string(temp_l_num));
 
         if (sym.get_type() != 31) g_error((*temp_it).get_line_n(), 'k');
         else sym = getsym();
+        cache_emit();
         int op_type = g_condition();
+        list<Pcode> condition = get_cache();
+        clear_cache();
+
         emit("branch", to_string(op_type), "set_label_end_label_" + to_string(temp_l_num));
+        emit("set_label", to_string(temp_l_num));
 
         if (sym.get_type() != 31) g_error((*temp_it).get_line_n(), 'k');
         else sym = getsym();
@@ -1040,7 +1053,12 @@ void g_loop_sentence() {
             emit("set_post_process", loop_var,
                  to_string(plus_or_minu), to_string(step_size));
         }
-        emit("jump", "set_label_" + to_string(temp_l_num));
+
+        for (Pcode &pcode : condition) {
+            pcodes.push_back(pcode);
+        }
+
+        emit("branch", to_string(op_type), "set_label_" + to_string(temp_l_num), "no_reverse");
         emit("end_label", to_string(temp_l_num));
     } else {
         g_error();

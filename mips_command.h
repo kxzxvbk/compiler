@@ -76,14 +76,16 @@ void addi(const string& reg_name_dst, const string& reg_name1, const string& con
 
 void sub(const string& reg_name_dst, const string& reg_name1, const string& reg_name2) {
     string ans;
-    ans =  "sub " + reg_name_dst + blank + reg_name1 + blank + reg_name2;
+    ans =  "subu " + reg_name_dst + blank + reg_name1 + blank + reg_name2;
     mout << ans << endl;
     last_output = ans;
 }
 
 void subi(const string& reg_name_dst, const string& reg_name1, const string& constant) {
     string ans;
-    ans =  "subi " + reg_name_dst + blank + reg_name1 + blank + constant;
+    int con = string2int(constant);
+    con = -con;
+    ans =  "addiu " + reg_name_dst + blank + reg_name1 + blank + to_string(con);
     mout << ans << endl;
     last_output = ans;
 }
