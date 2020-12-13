@@ -7,6 +7,7 @@
 #include "vector"
 #include "quard_code.h"
 
+static int op = 0;
 bool _is_temp_var(const string& name) {
     int count = 0;
     for (char i : name) {
@@ -22,7 +23,7 @@ public:
     }
 
     void add_descendent(int d) {
-        descendents.push_back(d);
+        // descendents.push_back(d);
     }
 
     // 局部优化
@@ -179,7 +180,8 @@ public:
     void optimization() {
         while (optimization_step());
         remove_redundant_temp_var();
-        //omit_assign_var();
+        omit_assign_var();
+        single_var();
     }
 
     vector<Quardcode> get_content() {
@@ -322,6 +324,226 @@ private:
         for (int i = temp_buf.size() - 1;i >= 0;i--) {
             content.push_back(temp_buf[i]);
         }
+    }
+
+    void single_var() {
+        vector<Quardcode> temp_buf;
+        vector<string> used_names;
+        int cur_place = 0;
+
+        for (auto it = content.begin();it != content.end();it++) {
+            Quardcode pc = *it;
+            cur_place++;
+
+            // add references to used_name
+            if (pc.type == "add" || pc.type == "sub" || pc.type == "mult" ||
+                pc.type == "div" || pc.type == "multi_rep" || pc.type == "lod_off" ||
+                pc.type == "assign_off") {
+                bool find1 = false;
+                for (auto & used_name : used_names) {
+                    if (used_name == pc.op1 && is_temp_var(pc.op1)) {
+                        find1 = true;
+                        break;
+                    }
+                }
+
+                if (find1) {
+                    vector<int> arr;
+                    string temp_name1 = pc.op1 + "sub" + to_string(op);
+                    op++;
+                    auto it1 = it;
+                    it1--;
+                    while (it1 != content.begin() && (*it1).type != "call" && (*it1).dst != pc.op1) it1--;
+                    if (it1 == content.begin()) it1 = it;
+                    else if ((*it1).dst == pc.op1) it1++;
+                    content.insert(it1,1, Quardcode("lod", temp_name1, arr, pc.op1));
+                    cur_place++;
+                    int now = 0;
+                    for (it = content.begin();;it++) {
+                        now++;
+                        if (now == cur_place) break;
+                    }
+                    (*it).op1 = temp_name1;
+                }
+                used_names.push_back(pc.op1);
+
+                bool find2 = false;
+                for (auto & used_name : used_names) {
+                    if (used_name == pc.op2 && is_temp_var(pc.op2)) {
+                        find2 = true;
+                        break;
+                    }
+                }
+
+                if (find2) {
+                    vector<int> arr;
+                    string temp_name2 = pc.op2 + "sub" + to_string(op);
+                    op++;
+                    auto it1 = it;
+                    it1--;
+                    while (it1 != content.begin() && (*it1).type != "call" && (*it1).dst != pc.op2) it1--;
+                    if (it1 == content.begin()) it1 = it;
+                    else if ((*it1).dst == pc.op2) it1++;
+                    content.insert(it1,1, Quardcode("lod", temp_name2, arr, pc.op2));
+                    cur_place++;
+                    int now = 0;
+                    for (it = content.begin();;it++) {
+                        now++;
+                        if (now == cur_place) break;
+                    }
+                    (*it).op2 = temp_name2;
+                }
+                used_names.push_back(pc.op2);
+            }
+            else if (pc.type == "lod" || pc.type == "neg") {
+                bool find1 = false;
+                for (auto & used_name : used_names) {
+                    if (used_name == pc.op1 && is_temp_var(pc.op1)) {
+                        find1 = true;
+                        break;
+                    }
+                }
+
+                if (find1) {
+                    vector<int> arr;
+                    string temp_name1 = pc.op1 + "sub" + to_string(op);
+                    op++;
+                    auto it1 = it;
+                    it1--;
+                    while (it1 != content.begin() && (*it1).type != "call" && (*it1).dst != pc.op1) it1--;
+                    if (it1 == content.begin()) it1 = it;
+                    else if ((*it1).dst == pc.op1) it1++;
+                    content.insert(it1,1, Quardcode("lod", temp_name1, arr, pc.op1));
+                    cur_place++;
+                    int now = 0;
+                    for (it = content.begin();;it++) {
+                        now++;
+                        if (now == cur_place) break;
+                    }
+                    (*it).op1 = temp_name1;
+                }
+                used_names.push_back(pc.op1);
+            }
+            else if (pc.type == "assign") {
+                bool find1 = false;
+                for (auto & used_name : used_names) {
+                    if (used_name == pc.op1 && is_temp_var(pc.op1)) {
+                        find1 = true;
+                        break;
+                    }
+                }
+
+                if (find1) {
+                    vector<int> arr;
+                    string temp_name1 = pc.op1 + "sub" + to_string(op);
+                    op++;
+                    auto it1 = it;
+                    it1--;
+                    while (it1 != content.begin() && (*it1).type != "call" && (*it1).dst != pc.op1) it1--;
+                    if (it1 == content.begin()) it1 = it;
+                    else if ((*it1).dst == pc.op1) it1++;
+                    content.insert(it1,1, Quardcode("lod", temp_name1, arr, pc.op1));
+                    cur_place++;
+                    int now = 0;
+                    for (it = content.begin();;it++) {
+                        now++;
+                        if (now == cur_place) break;
+                    }
+                    (*it).op1 = temp_name1;
+                }
+                used_names.push_back(pc.op1);
+            }
+            else if (pc.type == "print_v_int" || pc.type == "print_v_char" ||
+                     pc.type == "push" || pc.type == "return" || pc.type == "set_post_process") {
+                bool find1 = false;
+                for (auto & used_name : used_names) {
+                    if (used_name == pc.dst && is_temp_var(pc.dst)) {
+                        find1 = true;
+                        break;
+                    }
+                }
+
+                if (find1) {
+                    vector<int> arr;
+                    string temp_name1 = pc.dst + "sub" + to_string(op);
+                    op++;
+                    auto it1 = it;
+                    it1--;
+                    while (it1 != content.begin() && (*it1).type != "call" && (*it1).dst != pc.dst) it1--;
+                    if (it1 == content.begin()) it1 = it;
+                    else if ((*it1).dst == pc.dst) it1++;
+                    content.insert(it1,1, Quardcode("lod", temp_name1, arr, pc.dst));
+                    cur_place++;
+                    int now = 0;
+                    for (it = content.begin();;it++) {
+                        now++;
+                        if (now == cur_place) break;
+                    }
+                    (*it).dst = temp_name1;
+                }
+                used_names.push_back(pc.dst);
+            }
+            else if (pc.type == "beq" || pc.type == "bne" || pc.type == "ble" ||
+                     pc.type == "blt" || pc.type == "bge" || pc.type == "bgt") {
+
+                bool find1 = false;
+                for (auto & used_name : used_names) {
+                    if (used_name == pc.op1 && is_temp_var(pc.op1)) {
+                        find1 = true;
+                        break;
+                    }
+                }
+
+                if (find1) {
+                    vector<int> arr;
+                    string temp_name1 = pc.op1 + "sub" + to_string(op);
+                    op++;
+                    auto it1 = it;
+                    it1--;
+                    while (it1 != content.begin() && (*it1).type != "call" && (*it1).dst != pc.op1) it1--;
+                    if (it1 == content.begin()) it1 = it;
+                    else if ((*it1).dst == pc.op1) it1++;
+                    content.insert(it1,1, Quardcode("lod", temp_name1, arr, pc.op1));
+                    cur_place++;
+                    int now = 0;
+                    for (it = content.begin();;it++) {
+                        now++;
+                        if (now == cur_place) break;
+                    }
+                    (*it).op1 = temp_name1;
+                }
+                used_names.push_back(pc.op1);
+
+                bool find2 = false;
+                for (auto & used_name : used_names) {
+                    if (used_name == pc.op2 && is_temp_var(pc.op2)) {
+                        find2 = true;
+                        break;
+                    }
+                }
+
+                if (find2) {
+                    vector<int> arr;
+                    string temp_name2 = pc.op2 + "sub" + to_string(op);
+                    op++;
+                    auto it1 = it;
+                    it1--;
+                    while (it1 != content.begin() && (*it1).type != "call" && (*it1).dst != pc.op2) it1--;
+                    if (it1 == content.begin()) it1 = it;
+                    else if ((*it1).dst == pc.op2) it1++;
+                    content.insert(it1,1, Quardcode("lod", temp_name2, arr, pc.op2));
+                    cur_place++;
+                    int now = 0;
+                    for (it = content.begin();;it++) {
+                        now++;
+                        if (now == cur_place) break;
+                    }
+                    (*it).op2 = temp_name2;
+                }
+                used_names.push_back(pc.op2);
+            }
+        }
+
     }
 };
 

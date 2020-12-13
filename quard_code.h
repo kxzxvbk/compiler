@@ -91,7 +91,9 @@ public:
         if (this->type == "set_if_label") return type + " " + op1;
         if (this->type == "end_label") return type + " " + op1;
         if (type == "beq" || type == "bne" || type == "ble" ||
-            type == "blt" || type == "bge" || type == "bgt") return type + " " + op1 + " " + op2, + " " + dst;
+            type == "blt" || type == "bge" || type == "bgt") {
+            return type + " " + op1 + " " + op2 + " " + dst;
+        }
         if (type == "jump") return type + " " + dst;
         if (type == "push") return type + " " + dst;
         if (type == "para") return type + " " + dst;
@@ -105,6 +107,7 @@ public:
         if (type == "neg") return dst + "=-" + op1;
         if (type == "set_down_move") return type + " " + dst;
         if (type == "clear_all") return type;
+        if (type == "block_end") return type;
         cout << type << "#####FATAL ERROR#####";
         return "";
     }

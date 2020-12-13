@@ -20,6 +20,8 @@ void lw(const string& reg_name, int offset, const string& base_reg) {
     string ans;
     if ((last_output == "sw " + reg_name + blank + to_string(offset) +
     "(" + base_reg + ")" && o1)) return;
+    if ((last_output == "lw " + reg_name + blank + to_string(offset) +
+                        "(" + base_reg + ")" && o1)) return;
     else if (last_output == "sw " + split_reg_src_from_lw_and_sw(last_output)
     + blank + to_string(offset) + "(" + base_reg + ")" && o1)
         ans = "move " + reg_name + blank + split_reg_src_from_lw_and_sw(last_output);
@@ -39,6 +41,7 @@ void lw(const string& reg_name, const string& off_reg, const string& base_reg) {
 
 void sw(const string& reg_name, int offset, const string& base_reg) {
     string ans;
+
     ans = "sw "  + reg_name + blank + to_string(offset) + "(" + base_reg + ")";
     mout << ans << endl;
     last_output = ans;
@@ -216,6 +219,7 @@ void allocate_string(const string& string_name, const string& content) {
 
 void mv(const string& reg_dst, const string& reg_src) {
     string ans;
+    if (reg_dst == reg_src) return;
     ans =  "move " + reg_dst + blank + reg_src;
     mout << ans << endl;
     last_output = ans;

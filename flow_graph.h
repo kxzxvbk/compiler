@@ -7,6 +7,16 @@
 #include "mips.h"
 #include "basic_block.h"
 
+
+bool is_case_jump(string name) {
+    int count = 0;
+    for (int i = 0;i < name.size();i++) {
+        if (name[i] == '_') count++;
+    }
+    return count == 3;
+
+}
+
 class flow_graph{
 public:
     flow_graph() {
@@ -38,28 +48,60 @@ private:
     void split_basic_blocks() {
         vector<Quardcode> qbuffer;
         int block_id = 1;
-        bool never_in = true;
         for (const auto& pc : qcodes) {
             // 跳转到的入口
             if (pc.type == "set_label" || pc.type == "set_function_flag") {
-                if (pc.type == "set_function_flag" && !never_in) {
-                    never_in = false;
+                vector<int> arr_temp;
+                int count_t = 0;
+                for (int ii = 0;ii < pc.dst.size();ii++) {
+                    if (pc.dst[ii] == '_') count_t++;
                 }
-                else {
-                    vector<int> arr_temp;
-                    qbuffer.push_back((Quardcode("clear_all", "", arr_temp, "", "")));
+                if (count_t != 1 && pc.type == "set_label") {
+                    qbuffer.push_back((Quardcode("block_end", "", arr_temp, "", "")));
                     blocks.emplace_back(qbuffer);
+                    qbuffer.clear();
+                    qbuffer.push_back(pc);
+                    vector<int> arr_temp1;
+                    qbuffer.push_back((Quardcode("clear_all", "", arr_temp1, "", "")));
                     entrance2id[pc.dst] = block_id;
                     block_id++;
-                    qbuffer.clear();
+                    continue;
+                } else if (count_t == 1 && pc.type == "set_label") {
+                    qbuffer.push_back((Quardcode("block_end", "", arr_temp, "", "")));
+                    qbuffer.push_back(pc);
+                    vector<int> arr_temp1;
+                    qbuffer.push_back((Quardcode("clear_all", "", arr_temp1, "", "")));
+                    continue;
                 }
+                else if (pc.type == "set_function_flag") {
+                    qbuffer.push_back((Quardcode("block_end", "", arr_temp, "", "")));
+                    blocks.emplace_back(qbuffer);
+                    qbuffer.clear();
+                    qbuffer.push_back(pc);
+                    vector<int> arr_temp1;
+                    qbuffer.push_back((Quardcode("clear_all", "", arr_temp1, "", "")));
+                    entrance2id[pc.dst] = block_id;
+                    block_id++;
+                    continue;
+                }
+            }
+            else if (pc.type == "call") {
+                qbuffer.push_back(pc);
+                vector<int> arr_temp;
+                qbuffer.push_back((Quardcode("clear_all", "", arr_temp, "", "")));
+                continue;
             }
             // 有条件跳转语句
             else if (pc.type == "beq" || pc.type == "bne" || pc.type == "ble" ||
                      pc.type == "blt" || pc.type == "bge" || pc.type == "bgt") {
-                qbuffer.push_back(pc);
                 vector<int> arr_temp;
-                qbuffer.push_back((Quardcode("clear_all", "", arr_temp, "", "")));
+                if (!is_case_jump(pc.dst)) {
+                    qbuffer.push_back((Quardcode("block_end", "", arr_temp, "", "")));
+                    vector<int> arr_temp1;
+                    qbuffer.push_back((Quardcode("clear_all", "", arr_temp1, "", "")));
+                }
+
+                qbuffer.push_back(pc);
                 blocks.emplace_back(qbuffer);
                 block_id++;
                 qbuffer.clear();
@@ -68,9 +110,12 @@ private:
             //无条件跳转语句
             else if (pc.type == "jump" ||
                      pc.type == "return" || pc.type == "shut_down") {
+                if (pc.type != "shut_down") {
+                    vector<int> arr_temp;
+                    qbuffer.push_back((Quardcode("block_end", "", arr_temp, "", "")));
+                }
                 qbuffer.push_back(pc);
-                vector<int> arr_temp;
-                qbuffer.push_back((Quardcode("clear_all", "", arr_temp, "", "")));
+
                 blocks.emplace_back(qbuffer);
                 block_id++;
                 qbuffer.clear();
@@ -81,8 +126,8 @@ private:
         // 程序结束也是一个入口语句
         if (!qbuffer.empty()) {
             blocks.emplace_back(qbuffer);
-            vector<int> arr_temp;
-            qbuffer.push_back((Quardcode("clear_all", "", arr_temp, "", "")));
+            vector<int> arr_temp1;
+            qbuffer.push_back((Quardcode("clear_all", "", arr_temp1, "", "")));
         }
     }
 

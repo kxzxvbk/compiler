@@ -962,7 +962,7 @@ void g_step_length() {
 }
 
 void g_loop_sentence() {
-    if (sym.get_type() == 14) {
+    if (sym.get_type() == 14 && loop_o) {
         sym = getsym();
 
         lab_count++;
@@ -988,7 +988,7 @@ void g_loop_sentence() {
 
         emit("branch", to_string(op_type), "set_label_" + to_string(temp_l_num), "no_reverse");
         emit("end_label", to_string(temp_l_num));
-    } else if (sym.get_type() == 15) {
+    } else if (sym.get_type() == 15 && loop_o) {
         sym = getsym();
         if (sym.get_type() != 33) g_error();
         sym = getsym();
@@ -1060,7 +1060,89 @@ void g_loop_sentence() {
 
         emit("branch", to_string(op_type), "set_label_" + to_string(temp_l_num), "no_reverse");
         emit("end_label", to_string(temp_l_num));
-    } else {
+    }
+    else if (sym.get_type() == 14) {
+        sym = getsym();
+
+        lab_count++;
+        int temp_l_num = lab_count;
+        emit("set_label", to_string(temp_l_num));
+
+        if (sym.get_type() != 33) g_error();
+        sym = getsym();
+        int op_type = g_condition();
+        emit("branch", to_string(op_type), "set_label_end_label_" + to_string(temp_l_num));
+
+        if (sym.get_type() != 34) g_error((*temp_it).get_line_n(), 'l');
+        else sym = getsym();
+        g_sentence();
+        emit("jump", "set_label_" + to_string(temp_l_num));
+        emit("end_label", to_string(temp_l_num));
+    } else if (sym.get_type() == 15) {
+        sym = getsym();
+        if (sym.get_type() != 33) g_error();
+        sym = getsym();
+        // init
+        if (sym.get_type() != 0) g_error();
+        string tem_name;
+        if (cur_tab.has_name(sym.get_source()))
+            tem_name =  "@" + cur_func.get_name() + "_@Usr_" + sym.get_source();
+        else
+            tem_name = sym.get_source();
+
+        if (!cur_tab.has_name(sym.get_source()) && !global_sym_tab.has_name(sym.get_source()))
+            g_error(sym.get_line_n(), 'c');
+        sym = getsym();
+        if (sym.get_type() != 30) g_error();
+        sym = getsym();
+        g_expr();
+        emit("assign", tem_name);
+
+        // condition
+        lab_count++;
+        int temp_l_num = lab_count;
+        emit("set_label", to_string(temp_l_num));
+
+        if (sym.get_type() != 31) g_error((*temp_it).get_line_n(), 'k');
+        else sym = getsym();
+        int op_type = g_condition();
+        emit("branch", to_string(op_type), "set_label_end_label_" + to_string(temp_l_num));
+
+        if (sym.get_type() != 31) g_error((*temp_it).get_line_n(), 'k');
+        else sym = getsym();
+
+        // post_process
+        if (sym.get_type() != 0) g_error();
+        if (!cur_tab.has_name(sym.get_source()) && !global_sym_tab.has_name(sym.get_source()))
+            g_error(sym.get_line_n(), 'c');
+        sym = getsym();
+        if (sym.get_type() != 30) g_error();
+        sym = getsym();
+        if (sym.get_type() != 0) g_error();
+        string loop_var = sym.get_source();
+        if (!cur_tab.has_name(sym.get_source()) && !global_sym_tab.has_name(sym.get_source()))
+            g_error(sym.get_line_n(), 'c');
+        sym = getsym();
+        if (sym.get_type() != 19 && sym.get_type() != 20) g_error();
+        int plus_or_minu = sym.get_type() - 19;
+        sym = getsym();
+        int step_size = sym.get_value();
+        g_step_length();
+
+        if (sym.get_type() != 34) g_error((*temp_it).get_line_n(), 'l');
+        else sym = getsym();
+        g_sentence();
+        if (cur_tab.has_name(loop_var)) {
+            emit("set_post_process", "@" + cur_func.get_name() + "_@Usr_" + loop_var,
+                 to_string(plus_or_minu), to_string(step_size));
+        } else {
+            emit("set_post_process", loop_var,
+                 to_string(plus_or_minu), to_string(step_size));
+        }
+        emit("jump", "set_label_" + to_string(temp_l_num));
+        emit("end_label", to_string(temp_l_num));
+    }
+    else {
         g_error();
     }
     if (t3) fout << "<循环语句>" << endl;
@@ -1087,7 +1169,7 @@ void g_case_sub_sentence(int cur_lab_num, int case_num) {
     sym = getsym();
     int case_const = get_const();
     emit("li", to_string(case_const));
-    if (case_num != 1) emit("set_label", to_string(cur_lab_num) + "_" + to_string(case_num));
+    emit("set_label", to_string(cur_lab_num) + "_" + to_string(case_num));
     emit("branch_no_get", "4",
          "set_label_" +  to_string(cur_lab_num) + "_" + to_string(case_num+1));
     int case_type;
